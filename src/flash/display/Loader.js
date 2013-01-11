@@ -496,31 +496,6 @@ var LoaderDefinition = (function () {
               }
             }
 
-            //if (exports) {
-            //  // HACK mocking the sound clips presence
-            //  var SoundMock = function(assets) {
-            //    var clip = {
-            //      start: function() {},
-            //      setVolume: function() {}
-            //    };
-            //    for (var i = 0; i < assets.length; i++) {
-            //      if (assets[i].className) {
-            //        this[assets[i].className] = clip;
-            //      }
-            //    }
-            //  };
-            //
-            //  as2Object.soundmc = new SoundMock(exports);
-            //  var soundClass = avm2.systemDomain.getClass("flash.display.MovieClip");
-            //  var soundMock = soundClass.createInstance();
-            //  soundMock._name = 'soundmc';
-            //  soundMock._timeline = [new Promise];
-            //  soundMock._timeline[0].resolve([]);
-            //  soundMock._exports = exports;
-            //  soundMock.$as2Object = as2Object.soundmc;
-            //  root.addChild(soundMock);
-            //}
-
             root.symbol.frameScripts = frameScripts;
           }
 

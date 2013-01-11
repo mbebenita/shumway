@@ -40,7 +40,6 @@ var MovieClipDefinition = (function () {
       }
       return this.$as2Object;
     },
-
     _gotoFrame: function (frameNum, scene) {
       if (frameNum < 1 || frameNum > this._totalFrames)
         frameNum = 1;
@@ -55,7 +54,7 @@ var MovieClipDefinition = (function () {
 
       this._markAsDirty();
 
-      while (currentFrame++ < (frameNum || 1)) {
+      while (currentFrame++ < frameNum) {
         var children = this._children;
         var depthMap = this._depthMap;
         var framePromise = this._timeline[currentFrame - 1];
