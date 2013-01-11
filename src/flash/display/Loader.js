@@ -441,13 +441,13 @@ var LoaderDefinition = (function () {
           var stage = loader._stage;
 
           stage._frameRate = loaderInfo._frameRate;
-          stage._loaderInfo = loaderInfo;
           stage._stageHeight = loaderInfo._height;
           stage._stageWidth = loaderInfo._width;
 
           var rootClass = avm2.applicationDomain.getClass(val.className);
           var root = rootClass.createAsSymbol({
             framesLoaded: 1,
+            loader: loader,
             parent: stage,
             timeline: timeline,
             totalFrames: val.props.totalFrames,
@@ -564,10 +564,11 @@ var LoaderDefinition = (function () {
       });
     },
     _commitSymbol: function (symbol) {
+      var className = 'flash.display.DisplayObject';
       var dependencies = symbol.require;
       var dictionary = this._dictionary;
       var promiseQueue = [];
-      var symbolInfo = { };
+      var props = { loader: this };
       var symbolPromise = new Promise;
 
       if (dependencies && dependencies.length) {
@@ -606,18 +607,20 @@ var LoaderDefinition = (function () {
             framePromise.resolve(displayList);
 
             var statePromise = new Promise;
-            stateInfo = { };
-            stateInfo.className = 'flash.display.Sprite';
-            stateInfo.props = { timeline: [framePromise] };
-            statePromise.resolve(stateInfo);
+            statePromise.resolve({
+              className: 'flash.display.Sprite',
+              props: {
+                loader: this,
+                timeline: [framePromise]
+              }
+            });
+
             states[stateName] = statePromise;
           }
         }
 
-        symbolInfo.className = 'flash.display.SimpleButton';
-        symbolInfo.props = {
-          states: states
-        };
+        className = 'flash.display.SimpleButton';
+        props.states = states;
         break;
       case 'font':
         var charset = fromCharCode.apply(null, symbol.codes);
@@ -632,7 +635,7 @@ var LoaderDefinition = (function () {
           //var ctx = (document.createElement('canvas')).getContext('2d');
           //ctx.font = '1024px "' + symbol.name + '"';
           //var defaultWidth = ctx.measureText(charset).width;
-          symbolInfo.className = 'flash.text.Font';
+          className = 'flash.text.Font';
         }
         break;
       case 'image':
@@ -644,58 +647,48 @@ var LoaderDefinition = (function () {
         img.src = 'data:' + symbol.mimeType + ';base64,' + btoa(symbol.data);
 
         promiseQueue.push(imgPromise);
-        symbolInfo.className = 'flash.display.BitmapData';
-        symbolInfo.props = {
-          img: img,
-          width: symbol.width,
-          height: symbol.height
-        };
+        className = 'flash.display.BitmapData';
+        props.img = img;
+        props.width = symbol.width;
+        props.height = symbol.height;
         break;
       case 'label':
         var drawFn = new Function('d,c,r', symbol.data);
-        symbolInfo.className = 'flash.text.StaticText';
-        symbolInfo.props = {
-          bbox: symbol.bbox,
-          draw: function (c, r) {
-            return drawFn.call(this, dictionary, c, r);
-          }
+        className = 'flash.text.StaticText';
+        props.bbox = symbol.bbox;
+        props.draw = function (c, r) {
+          return drawFn.call(this, dictionary, c, r);
         };
         break;
       case 'text':
         var drawFn = new Function('d,c,r', symbol.data);
-        symbolInfo.className = 'flash.text.TextField';
-        symbolInfo.props = {
-          bbox: symbol.bbox,
-          draw: function (c, r) {
-            return drawFn.call(this, dictionary, c, r);
-          },
-          text: symbol.value,
-          variableName: symbol.variableName
+        className = 'flash.text.TextField';
+        props.bbox = symbol.bbox;
+        props.draw = function (c, r) {
+          return drawFn.call(this, dictionary, c, r);
         };
+        props.text = symbol.value;
+        props.variableName = symbol.variableName;
         break;
       case 'shape':
         var createGraphicsData = new Function('d,r', 'return ' + symbol.data);
         var graphics = new flash.display.Graphics;
         graphics._scale = 0.05;
 
-        symbolInfo.className = 'flash.display.Shape';
-        symbolInfo.props = {
-          bbox: symbol.bbox,
-          graphics: graphics
-        };
+        className = 'flash.display.Shape';
+        props.bbox = symbol.bbox;
+        props.graphics = graphics;
 
         symbolPromise.then(function () {
           graphics.drawGraphicsData(createGraphicsData(dictionary, 0));
         });
         break;
       case 'sound':
-        symbolInfo.className = 'flash.media.Sound';
-        symbolInfo.props = {
-          sampleRate: symbol.sampleRate,
-          channels: symbol.channels,
-          pcm: symbol.pcm,
-          packaged: symbol.packaged
-        };
+        className = 'flash.media.Sound';
+        props.sampleRate = symbol.sampleRate;
+        props.channels = symbol.channels;
+        props.pcm = symbol.pcm;
+        props.packaged = symbol.packaged;
         break;
       case 'sprite':
         var frameCount = symbol.frameCount;
@@ -708,7 +701,6 @@ var LoaderDefinition = (function () {
           var frame = frames[i];
           var framePromise = new Promise;
           var depths = frame.depths;
-
           var displayList = Object.create(null);
 
           if (depths) {
@@ -766,25 +758,25 @@ var LoaderDefinition = (function () {
           }
         }
 
-        symbolInfo.className = 'flash.display.MovieClip';
-        symbolInfo.props = {
-          timeline: timeline,
-          framesLoaded: frameCount,
-          frameLabels: frameLabels,
-          frameScripts: frameScripts,
-          totalFrames: frameCount
-        };
+        className = 'flash.display.MovieClip';
+        props.timeline = timeline;
+        props.framesLoaded = frameCount;
+        props.frameLabels = frameLabels;
+        props.frameScripts = frameScripts;
+        props.totalFrames = frameCount;
         break;
       }
 
       dictionary[symbol.id] = symbolPromise;
       Promise.when.apply(Promise, promiseQueue).then(function () {
-        symbolPromise.resolve(symbolInfo);
+        symbolPromise.resolve({
+          className: className,
+          props: props
+        });
       });
     },
     _init: function (info) {
       var loader = this;
-
       var loaderInfo = loader.contentLoaderInfo;
 
       loaderInfo._swfVersion = info.swfVersion;
@@ -792,7 +784,6 @@ var LoaderDefinition = (function () {
       var bbox = info.bbox;
       loaderInfo._width = bbox.right - bbox.left;
       loaderInfo._height = bbox.bottom - bbox.top;
-
       loaderInfo._frameRate = info.frameRate;
 
       var documentPromise = new Promise;
