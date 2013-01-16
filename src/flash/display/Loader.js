@@ -350,6 +350,7 @@ var LoaderDefinition = (function () {
     initialize: function () {
       this._contentLoaderInfo = null;
       this._dictionary = { };
+      this._displayList = null;
       this._symbols = { };
       this._timeline = [];
       this._previousPromise = null;
@@ -395,11 +396,10 @@ var LoaderDefinition = (function () {
       var exports = frame.exports;
       var loader = this;
       var dictionary = loader._dictionary;
-      var displayList = Object.create(null);
+      var displayList = Object.create(this._displayList);
       var loaderInfo = loader.contentLoaderInfo;
       var timeline = loader._timeline;
       var frameNum = timeline.length + 1;
-      var framePromise = new Promise;
       var prevPromise = this._previousPromise;
       var frameLoadedPromise = new Promise;
       this._previousPromise = frameLoadedPromise;
@@ -409,17 +409,28 @@ var LoaderDefinition = (function () {
       if (depths) {
         for (var depth in depths) {
           var cmd = depths[depth];
-          if (cmd && cmd.symbolId) {
-            var symbolPromise = dictionary[cmd.symbolId];
-            if (symbolPromise && !symbolPromise.resolved)
-              promiseQueue.push(symbolPromise);
+          if (cmd) {
+            if (displayList[depth] && cmd.move) {
+              var oldCmd = cmd;
+              cmd = Object.create(displayList[depth]);
+              for (var prop in oldCmd) {
+                var val = oldCmd[prop];
+                if (val)
+                  cmd[prop] = val;
+              }
+            }
 
-            displayList[depth] = Object.create(cmd, {
-              promise: { value: symbolPromise }
-            });
-          } else {
-            displayList[depth] = cmd;
+            if (cmd.symbolId) {
+              var itemPromise = dictionary[cmd.symbolId];
+              if (itemPromise && !itemPromise.resolved)
+                promiseQueue.push(itemPromise);
+
+              cmd = Object.create(cmd, {
+                promise: { value: itemPromise }
+              });
+            }
           }
+          displayList[depth] = cmd;
         }
       }
 
@@ -430,7 +441,7 @@ var LoaderDefinition = (function () {
 
       var i = frame.repeat;
       while (i--)
-        timeline.push(framePromise);
+        timeline.push(displayList);
 
       Promise.when.apply(Promise, promiseQueue).then(function () {
         if (abcBlocks && loader._isAvm2Enabled) {
@@ -459,8 +470,6 @@ var LoaderDefinition = (function () {
             );
           }
         }
-
-        framePromise.resolve(displayList);
 
         var root = loader._content;
         var needRootObject = !root;
@@ -641,15 +650,12 @@ var LoaderDefinition = (function () {
           if (characters.length === 1) {
             states[stateName] = characters[0];
           } else {
-            var framePromise = new Promise;
-            framePromise.resolve(displayList);
-
             var statePromise = new Promise;
             statePromise.resolve({
               className: 'flash.display.Sprite',
               props: {
                 loader: this,
-                timeline: [framePromise]
+                timeline: [displayList]
               }
             });
 
@@ -741,6 +747,7 @@ var LoaderDefinition = (function () {
         props.packaged = symbol.packaged;
         break;
       case 'sprite':
+        var displayList = null;
         var frameCount = symbol.frameCount;
         var frameLabels = { };
         var frameNum = 1;
@@ -749,24 +756,35 @@ var LoaderDefinition = (function () {
         var startSoundRegistrations = [];
         for (var i = 0, n = frames.length; i < n; i++) {
           var frame = frames[i];
-          var framePromise = new Promise;
           var depths = frame.depths;
-          var displayList = Object.create(null);
+
+          displayList = Object.create(displayList);
 
           if (depths) {
             for (var depth in depths) {
               var cmd = depths[depth];
-              if (cmd && cmd.symbolId) {
-                var itemPromise = dictionary[cmd.symbolId];
-                if (itemPromise && !itemPromise.resolved)
-                  promiseQueue.push(itemPromise);
+              if (cmd) {
+                if (displayList[depth] && cmd.move) {
+                  var oldCmd = cmd;
+                  cmd = Object.create(displayList[depth]);
+                  for (var prop in oldCmd) {
+                    var val = oldCmd[prop];
+                    if (val)
+                      cmd[prop] = val;
+                  }
+                }
 
-                displayList[depth] = Object.create(cmd, {
-                  promise: { value: itemPromise }
-                });
-              } else {
-                displayList[depth] = cmd;
+                if (cmd.symbolId) {
+                  var itemPromise = dictionary[cmd.symbolId];
+                  if (itemPromise && !itemPromise.resolved)
+                    promiseQueue.push(itemPromise);
+
+                  cmd = Object.create(cmd, {
+                    promise: { value: itemPromise }
+                  });
+                }
               }
+              displayList[depth] = cmd;
             }
           }
 
@@ -789,11 +807,9 @@ var LoaderDefinition = (function () {
 
           var j = frame.repeat;
           while (j--) {
-            timeline.push(framePromise);
+            timeline.push(displayList);
             frameNum++;
           }
-
-          framePromise.resolve(displayList);
         }
 
         var frameScripts = { };
