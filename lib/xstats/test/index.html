@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<title>xStats.js test page</title>
+		<style>
+			body {
+				background: #000;
+			}
+			button {
+			 display: block;
+			}
+			#bunnymark {
+				margin: 20px 0 0 0;
+			}
+		</style>
+		<script src="../xstats.js"></script>
+		<script src="bunnymark.js"></script>
+	</head>
+	<body>
+		<script>
+			(function() {
+				var body = document.body,
+					a = new xStats({ 'height': 130, 'width': 200, 'padding': 10 }),
+					b = new xStats({ 'locked': true }),
+					c = new xStats({ 'mode': 'ms', 'locked': true }),
+					d = new xStats({ 'mode': 'mem', 'locked': true });
+
+				body.appendChild(a.element);
+				body.appendChild(b.element);
+				body.appendChild(c.element);
+				body.appendChild(d.element);
+			}());
+		</script>
+	</body>
+</html>
