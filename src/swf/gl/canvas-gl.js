@@ -9,7 +9,7 @@ var CanvasWebGLContext = CanvasWebGLContext || (function (document, undefined) {
   };
 
   var CanvasWebGLContext = (function () {
-    var debug = false;
+    var debug = true;
     function matrixTranspose(r, c, m) {
       assert (r * c === m.length);
       var result = new Float32Array(m.length);
@@ -59,6 +59,7 @@ var CanvasWebGLContext = CanvasWebGLContext || (function (document, undefined) {
     var shaderRoot = "../../src/swf/gl/shaders/";
 
     function canvasWebGLContext(canvas) {
+      this.isGlContext = true;
       this.canvas = canvas;
       this._width = canvas.width;
       this._height = canvas.height;
