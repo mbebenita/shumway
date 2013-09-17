@@ -334,3 +334,89 @@ QuadTree.prototype._subdivide = function () {
   this.nodes[2] = new QuadTree(this.x, midY, widthLeft, heightBottom, level);
   this.nodes[3] = new QuadTree(midX, midY, widthRight, heightBottom, level);
 };
+
+/**
+ * Simple 2D bin-packing algorithm that recursively partitions space along the x and y axis. The binary tree
+ * can get quite deep so watch out of deep recursive calls.   This algorithm works best when inserting items
+ * that are sorted by width and height, from largest to smallest.
+ */
+var Packer = (function () {
+  /**
+   * Try out randomizing the orientation of each subdivision, sometimes this can lead to better results.
+   * @const
+   * @type {boolean}
+   */
+  var RANDOM_ORIENTATION = true;
+
+  function Node(x, y, w, h, horizontal) {
+    this.x = x;
+    this.y = y;
+    this.w = w;
+    this.h = h;
+    this.children = null;
+    this.horizontal = horizontal;
+    this.empty = true;
+  }
+
+  Node.prototype.insert = function insert(w, h) {
+    if (!this.empty) {
+      return;
+    }
+    if (this.w < w || this.h < h) {
+      return;
+    }
+    if (!this.children) {
+      var orientation = !this.horizontal;
+      if (RANDOM_ORIENTATION) {
+        orientation = Math.random() >= 0.5;
+      }
+      if (this.horizontal) {
+        this.children = [
+          new Node(this.x, this.y, this.w, h, false),
+          new Node(this.x, this.y + h, this.w, this.h - h, orientation),
+        ];
+      } else {
+        this.children = [
+          new Node(this.x, this.y, w, this.h, true),
+          new Node(this.x + w, this.y, this.w - w, this.h, orientation),
+        ];
+      }
+      var first = this.children[0];
+      if (first.w === w && first.h === h) {
+        first.empty = false;
+        return {x: first.x, y: first.y};
+      }
+      return this.insert(w, h);
+    } else {
+      var result;
+      result = this.children[0].insert(w, h);
+      if (result) {
+        return result;
+      }
+      result = this.children[1].insert(w, h);
+      if (result) {
+        return result;
+      }
+    }
+  };
+
+  /**
+   * @param {number} width
+   * @param {number} height
+   * @constructor
+   */
+  function packer(width, height) {
+    this.root = new Node(0, 0, width, height, false);
+  }
+
+  /**
+   * Tries to pack an item compactly and returns its placement.
+   * @param {number} width
+   * @param {number} height
+   * @returns {?{x: number, y: number}}
+   */
+  packer.prototype.insert = function insert(width, height) {
+    return this.root.insert(width, height);
+  };
+  return packer;
+})();
