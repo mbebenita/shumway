@@ -764,9 +764,9 @@ function renderStage(stage, ctx, events) {
           timelineEnter("RENDER");
           traceRenderer.value && frameWriter.enter("> Render Visitor");
           if (ctx instanceof CanvasWebGLContext) {
-            ctx.clear && ctx.clear();
+            ctx.initialize();
             (new RenderVisitor(stage, ctx, invalidPath, refreshStage)).start();
-            ctx.flush && ctx.flush();
+            ctx.flush();
           } else {
             (new RenderVisitor(stage, ctx, invalidPath, refreshStage)).start();
           }

@@ -1678,6 +1678,7 @@ function initStyle(style, dictionary) {
                    (style.type === GRAPHICS_FILL_NONSMOOTHED_REPEATING_BITMAP);
       style.style = factoryCtx.createPattern(bitmap.value.props.img,
                                              repeat ? "repeat" : "no-repeat");
+      style.style.image = bitmap.value.props.img;
       break;
     default:
       fail('invalid fill style', 'shape');
