@@ -28,11 +28,16 @@ var CanvasWebGLContext = CanvasWebGLContext || (function (document, undefined) {
     rectangle.prototype.clone = function clone() {
       return new Rectangle(this.x, this.y, this.width, this.height);
     };
+    rectangle.prototype.scale = function scale(s) {
+      this.x *= s;
+      this.y *= s;
+      this.width *= s;
+      this.height *= s;
+    };
     return rectangle;
   })();
 
   var CanvasWebGLContext = (function () {
-    
     function matrixTranspose(r, c, m) {
       assert (r * c === m.length);
       var result = new Float32Array(m.length);
@@ -67,6 +72,7 @@ var CanvasWebGLContext = CanvasWebGLContext || (function (document, undefined) {
       result[index +  3] = y;
       result[index +  4] = x;
       result[index +  5] = y + h;
+
       result[index +  6] = x;
       result[index +  7] = y + h;
       result[index +  8] = x + w;
@@ -82,6 +88,7 @@ var CanvasWebGLContext = CanvasWebGLContext || (function (document, undefined) {
     var shaderRoot = "../../src/swf/gl/shaders/";
 
     function canvasWebGLContext(canvas) {
+      this.isGlContext = true;
       this.canvas = canvas;
       this._width = canvas.width;
       this._height = canvas.height;
@@ -177,14 +184,17 @@ var CanvasWebGLContext = CanvasWebGLContext || (function (document, undefined) {
      * @returns {Rectangle}
      */
     canvasWebGLContext.prototype._loadTexture = function (image) {
+      var gl = this._gl;
       if (image.coordinates) {
+        gl.bindTexture(gl.TEXTURE_2D, this._texture);
+        gl.texSubImage2D(gl.TEXTURE_2D, 0, image.coordinates.x, image.coordinates.y, gl.RGBA, gl.UNSIGNED_BYTE, image);
         return image.coordinates;
       }
       var insertedAt = this._texturePacker.insert(image.width, image.height);
       image.coordinates = new Rectangle(insertedAt.x, insertedAt.y, image.width, image.height);
-      var gl = this._gl;
       gl.bindTexture(gl.TEXTURE_2D, this._texture);
       gl.texSubImage2D(gl.TEXTURE_2D, 0, insertedAt.x, insertedAt.y, gl.RGBA, gl.UNSIGNED_BYTE, image);
+      writer.writeLn("_loadTexture " + JSON.stringify(image.coordinates));
       return image.coordinates;
     };
 
@@ -235,6 +245,16 @@ var CanvasWebGLContext = CanvasWebGLContext || (function (document, undefined) {
       invertTransform(transform, 0);
       copyBuffer(result, resultIndex, position, positionIndex, length * 2);
       transformVertices(result, resultIndex, transform, 0, length);
+      for (var i = 0; i < length  * 2; i += 2) {
+        result[resultIndex + i] = (result[resultIndex + i] + bounds.x) / 1024;
+        result[resultIndex + i + 1] = (result[resultIndex + i + 1] + bounds.y) / 1024;
+      }
+    };
+
+    canvasWebGLContext.prototype._mapTexture2 = function  _mapTexture(result, resultIndex, position, positionIndex, length, bounds) {
+      settings.debug && writer.writeLn("_mapTexture " + toSafeArrayString(arguments));
+      var transform = new Float32Array(6);
+
       for (var i = 0; i < length  * 2; i += 2) {
         result[resultIndex + i] = (result[resultIndex + i] + bounds.x) / 1024;
         result[resultIndex + i + 1] = (result[resultIndex + i + 1] + bounds.y) / 1024;
@@ -429,7 +449,23 @@ var CanvasWebGLContext = CanvasWebGLContext || (function (document, undefined) {
 
     canvasWebGLContext.prototype.drawImage = function drawImage(image, dx, dy, dw, dh) {
       settings.debug && writer.writeLn("drawImage " + toSafeArrayString(arguments));
-      this.fillRect(dx, dy, 10, 10);
+      if (image.width === 0 || image.height === 0) {
+        writer.writeLn("drawImage Empty Image");
+        return;
+      }
+      var gl = this._gl;
+
+      this._createTransformedRectangleVertices(this._positionBuffer, this._positionBufferIndex, dx, dy, dw, dh);
+      var bounds = this._loadTexture(image).clone();
+      bounds.scale(1 / 1024);
+      createRectangleVertices(this._coordinateBuffer, this._coordinateBufferIndex, bounds.x, bounds.y, bounds.width, bounds.height);
+      this._positionBufferIndex += 12;
+      var color = RED;
+      for (var i = 0; i < 6; i++) {
+        this._colorBuffer.set(color, this._colorBufferIndex);
+        this._colorBufferIndex += 4;
+      }
+      this._coordinateBufferIndex += 12;
     }
 
     canvasWebGLContext.prototype.setTransform = function setTransform(m11, m12, m21, m22, dx, dy) {
@@ -619,8 +655,7 @@ var CanvasWebGLContext = CanvasWebGLContext || (function (document, undefined) {
     };
 
     canvasWebGLContext.prototype.initialize = function initialize() {
-      console.warn("NEW FRAME " + toSafeArrayString(this._currentTransformStack.subarray(this._currentTransformStackIndex, 6)) + ", depth: " + this._currentTransformStackIndex);
-
+      settings.debug && console.warn("initialize");
       var gl = this._gl;
       if (settings.blend) {
         gl.enable(gl.BLEND);
@@ -661,6 +696,8 @@ var CanvasWebGLContext = CanvasWebGLContext || (function (document, undefined) {
 
       gl.drawArrays(gl.TRIANGLES, 0, this._positionBufferIndex / 2);
 
+      assert (this._positionBufferIndex === this._coordinateBufferIndex &&
+              this._positionBufferIndex === this._colorBufferIndex / 2);
       this._colorBufferIndex = 0;
       this._positionBufferIndex = 0;
       this._coordinateBufferIndex = 0;
