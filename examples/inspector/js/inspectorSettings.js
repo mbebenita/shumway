@@ -186,11 +186,22 @@ document.getElementById("sample").addEventListener("click", function () {
 
 (function () {
   var gui = new dat.GUI({ autoPlace: false });
-  var webGLSettings = gui.addFolder('WebGL Settings');
-  webGLSettings.add(CanvasWebGLContext, 'debug');
-  webGLSettings.add(CanvasWebGLContext, 'blend');
-  webGLSettings.add(CanvasWebGLContext, 'alpha');
-  webGLSettings.add(CanvasWebGLContext, 'tessellator');
-  webGLSettings.open();
+
+  function addOptionSet(parent, set) {
+    var folder = parent.addFolder(set.name);
+    set.options.forEach(function (option) {
+      if (option instanceof OptionSet) {
+        addOptionSet(folder, option);
+      } else {
+        folder.add(option, "value", option.details).name(option.longName);
+      }
+    });
+    folder.open();
+  }
+
+  addOptionSet(gui, webGLOptions);
+  addOptionSet(gui, rendererOptions);
+  // addOptionSet(gui, systemOptions);
+
   document.getElementById("settingsContainer").appendChild(gui.domElement);
 })();

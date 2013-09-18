@@ -18,13 +18,15 @@
 /*global rgbaObjToStr, FirefoxCom, Timer, FrameCounter, metrics, coreOptions, OptionSet, Option, appendToFrameTerminal, frameWriter, randomStyle*/
 
 var rendererOptions = coreOptions.register(new OptionSet("Renderer Options"));
-var traceRenderer = rendererOptions.register(new Option("tr", "traceRenderer", "number", 0, "trace renderer execution"));
-var disablePreVisitor = rendererOptions.register(new Option("dpv", "disablePreVisitor", "boolean", false, "disable pre visitor"));
-var disableRenderVisitor = rendererOptions.register(new Option("drv", "disableRenderVisitor", "boolean", false, "disable render visitor"));
-var disableMouseVisitor = rendererOptions.register(new Option("dmv", "disableMouseVisitor", "boolean", false, "disable mouse visitor"));
-var showRedrawRegions = rendererOptions.register(new Option("rr", "showRedrawRegions", "boolean", false, "show redraw regions"));
-var renderAsWireframe = rendererOptions.register(new Option("raw", "renderAsWireframe", "boolean", false, "render as wireframe"));
-var showQuadTree = rendererOptions.register(new Option("qt", "showQuadTree", "boolean", false, "show quad tree"));
+var traceRenderer = rendererOptions.register(new Option("", "traceRenderer", "number", 0, "trace renderer execution"));
+var disablePreVisitor = rendererOptions.register(new Option("", "disablePreVisitor", "boolean", false, "disable pre visitor"));
+var disableRenderVisitor = rendererOptions.register(new Option("", "disableRenderVisitor", "boolean", false, "disable render visitor"));
+var disableMouseVisitor = rendererOptions.register(new Option("", "disableMouseVisitor", "boolean", false, "disable mouse visitor"));
+var showRedrawRegions = rendererOptions.register(new Option("", "showRedrawRegions", "boolean", false, "show redraw regions"));
+var renderAsWireframe = rendererOptions.register(new Option("", "renderAsWireframe", "boolean", false, "render as wireframe"));
+var showQuadTree = rendererOptions.register(new Option("", "showQuadTree", "boolean", false, "show quad tree"));
+var fullThrottle = rendererOptions.register(new Option("", "fullThrottle", "boolean", false, "full throttle mode"));
+var framesPerTick = rendererOptions.register(new Option("", "framesPerTick", "number", 1, "number of frames to draw every tick"));
 
 var CanvasCache = {
   cache: [],
@@ -660,8 +662,6 @@ function renderStage(stage, ctx, events) {
   var firstRun = true;
   var frameCount = 0;
   var frameFPSAverage = new metrics.Average(120);
-  var framesPerTick = 1;
-  var fullThrottle = true;
 
   (function draw(framesLeft) {
     var now = performance.now();
@@ -708,7 +708,7 @@ function renderStage(stage, ctx, events) {
       if (renderFrame) {
         frameTime = now;
         maxDelay = 1000 / stage._frameRate;
-        if (!fullThrottle) {
+        if (!fullThrottle.value) {
           while (nextRenderAt < now) {
             nextRenderAt += maxDelay;
           }
@@ -828,7 +828,7 @@ function renderStage(stage, ctx, events) {
       draw(framesLeft - 1);
     } else {
       requestAnimationFrame(function () {
-        draw(framesPerTick);
+        draw(framesPerTick.value);
       });
     }
   })();
