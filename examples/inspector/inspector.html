@@ -44,6 +44,7 @@ limitations under the License.
       <div class="toolbarButtonBar">
         <div id="showDebugInfo" class="toolbarButton pressedState" data-panelid="debugInfoContainer">Debug Info</div>
         <div id="showDisplayList" class="toolbarButton" data-panelid="displayListContainer">Display List</div>
+        <div id="showSettings" class="toolbarButton" data-panelid="settingsContainer">Settings</div>
       </div>
       <div id="ctrlLogToConsole">
         <label for="chkLogToConsole">Log to Browser Console</label>
@@ -59,6 +60,8 @@ limitations under the License.
       <div id="timerInfo" class="debugPanel" tabindex='5'></div>
     </div>
     <div id="displayListContainer">
+    </div>
+    <div id="settingsContainer">
     </div>
 
     <div id="bottomToolbar" class="toolbarBox">
@@ -327,10 +330,14 @@ limitations under the License.
     <script src="js/classes/SWFController.js"></script>
     <script src="js/classes/Terminal.js"></script>
     <script src="js/classes/FPS.js"></script>
+    <script src="js/classes/dat.gui.min.js"></script>
+
     <script src="js/inspectorSettings.js"></script>
     <script src="js/inspectorLoader.js"></script>
     <script src="js/inspectorLogging.js"></script>
     <script src="js/inspector.js"></script>
+
+
 
     <script>
         SHUMWAY_ROOT = "../../src/";

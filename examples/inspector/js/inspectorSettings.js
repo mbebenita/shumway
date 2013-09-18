@@ -183,3 +183,12 @@ document.getElementById("sample").addEventListener("click", function () {
   });
   setElementState();
 })();
+
+(function () {
+  var gui = new dat.GUI({ autoPlace: false });
+  var webGLSettings = gui.addFolder('WebGL Settings');
+  webGLSettings.add(CanvasWebGLContext, 'debug');
+  webGLSettings.add(CanvasWebGLContext, 'blend');
+  webGLSettings.open();
+  document.getElementById("settingsContainer").appendChild(gui.domElement);
+})();

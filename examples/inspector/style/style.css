@@ -116,10 +116,10 @@ body.simple #xstats {
   display: inline-block;
 }
 
-#debugInfoContainer.active, #displayListContainer.active {
+#debugInfoContainer.active, #displayListContainer.active, #settingsContainer.active {
   display: block;
 }
-#debugInfoContainer, #displayListContainer {
+#debugInfoContainer, #displayListContainer, #settingsContainer {
   display: none;
   position: absolute;
   top: 32px;
@@ -274,5 +274,5 @@ body.simple #xstats {
 
 @media only screen and (max-width: 768px) {
   #stageContainer, #topToolbar, #xstats, #fpsPanelContainer { right: 0; }
-  #debugInfoToolbar, #debugInfoContainer, #displayListContainer { display: none !important; }
+  #debugInfoToolbar, #debugInfoContainer, #displayListContainer, #settingsContainer { display: none !important; }
 }
