@@ -189,6 +189,8 @@ document.getElementById("sample").addEventListener("click", function () {
   var webGLSettings = gui.addFolder('WebGL Settings');
   webGLSettings.add(CanvasWebGLContext, 'debug');
   webGLSettings.add(CanvasWebGLContext, 'blend');
+  webGLSettings.add(CanvasWebGLContext, 'alpha');
+  webGLSettings.add(CanvasWebGLContext, 'tessellator');
   webGLSettings.open();
   document.getElementById("settingsContainer").appendChild(gui.domElement);
 })();

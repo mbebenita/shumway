@@ -134,13 +134,16 @@ var CanvasWebGLContext = CanvasWebGLContext || (function (document, undefined) {
 
       this._texture = this._createTexture(1024, 1024, null);
       this._texturePacker = new Packer(1024, 1024);
-      this._fillStyle = null;
+      this._texturePacker.insert(1, 1);
+      this._fillStyle = "#000000";
     }
 
     var settings = canvasWebGLContext;
 
     settings.debug = false;
-    settings.blend = false;
+    settings.blend = true;
+    settings.alpha = false;
+    settings.tessellator = false;
     
     var MOVE_TO = 0x01;
     var LINE_TO = 0x02;
@@ -186,8 +189,8 @@ var CanvasWebGLContext = CanvasWebGLContext || (function (document, undefined) {
     canvasWebGLContext.prototype._loadTexture = function (image) {
       var gl = this._gl;
       if (image.coordinates) {
-        gl.bindTexture(gl.TEXTURE_2D, this._texture);
-        gl.texSubImage2D(gl.TEXTURE_2D, 0, image.coordinates.x, image.coordinates.y, gl.RGBA, gl.UNSIGNED_BYTE, image);
+//        gl.bindTexture(gl.TEXTURE_2D, this._texture);
+//        gl.texSubImage2D(gl.TEXTURE_2D, 0, image.coordinates.x, image.coordinates.y, gl.RGBA, gl.UNSIGNED_BYTE, image);
         return image.coordinates;
       }
       var insertedAt = this._texturePacker.insert(image.width, image.height);
@@ -198,7 +201,10 @@ var CanvasWebGLContext = CanvasWebGLContext || (function (document, undefined) {
       return image.coordinates;
     };
 
-    canvasWebGLContext.prototype._tesselateCurrentPathBufferFill = function _tesselateCurrentPathBufferFill(result, index) {
+    canvasWebGLContext.prototype._tessellateCurrentPathBufferFill = function _tessellateCurrentPathBufferFill(result, index) {
+      if (settings.tessellator) {
+        return this._gluTessellateCurrentPathBufferFill(result, index);
+      }
       var i32 = this._pathBufferI32;
       var f32 = this._pathBufferF32;
       var ox = 0, oy = 0;
@@ -221,7 +227,6 @@ var CanvasWebGLContext = CanvasWebGLContext || (function (document, undefined) {
             if (first) {
               first = false;
             } else {
-              // (ox,oy -> lx,ly -> cx,cy)
               result[index + 0] = ox;
               result[index + 1] = oy;
               result[index + 2] = lx;
@@ -236,6 +241,53 @@ var CanvasWebGLContext = CanvasWebGLContext || (function (document, undefined) {
         }
       }
       return triangles;
+    };
+
+    canvasWebGLContext.prototype._gluTessellateCurrentPathBufferFill = function _gluTessellateCurrentPathBufferFill(result, index) {
+      var i32 = this._pathBufferI32;
+      var f32 = this._pathBufferF32;
+
+      var loops = [];
+      var loop;
+      var i = 0;
+      while (i < this._pathBufferIndex) {
+        var command = i32[i++];
+        switch (command) {
+          case MOVE_TO:
+            if (loop) {
+              loops.push(loop);
+            }
+            loop = [];
+            loop.push(f32[i++]);
+            loop.push(f32[i++]);
+            break;
+          case LINE_TO:
+            loop.push(f32[i++]);
+            loop.push(f32[i++]);
+            break;
+        }
+      }
+      assert (loop);
+      loops.push(new Float32Array(loop));
+
+      var tessellation = tessellate(loops);
+      var triangles = tessellation.triangles;
+      var vertices = tessellation.vertices;
+
+      for (var i = 0; i < triangles.length; i += 3) {
+        var v0 = triangles[i] * 2;
+        var v1 = triangles[i + 1] * 2;
+        var v2 = triangles[i + 2] * 2;
+        result[index + 0] = vertices[v0 + 0];
+        result[index + 1] = vertices[v0 + 1];
+        result[index + 2] = vertices[v1 + 0];
+        result[index + 3] = vertices[v1 + 1];
+        result[index + 4] = vertices[v2 + 0];
+        result[index + 5] = vertices[v2 + 1];
+        index += 6;
+      }
+
+      return triangles.length / 3;
     };
 
     canvasWebGLContext.prototype._mapTexture = function  _mapTexture(result, resultIndex, position, positionIndex, length, bounds) {
@@ -515,7 +567,7 @@ var CanvasWebGLContext = CanvasWebGLContext || (function (document, undefined) {
 
     canvasWebGLContext.prototype.fill = function fill() {
       settings.debug && writer.writeLn("fill " + toSafeArrayString(arguments));
-      var triangles = this._tesselateCurrentPathBufferFill(this._positionBuffer, this._positionBufferIndex);
+      var triangles = this._tessellateCurrentPathBufferFill(this._positionBuffer, this._positionBufferIndex);
       var vertices = triangles * 3;
       if (this._fillStyle && this._fillStyle.image) {
         var bounds = this._loadTexture(this._fillStyle.image).clone();
@@ -524,7 +576,7 @@ var CanvasWebGLContext = CanvasWebGLContext || (function (document, undefined) {
       this._coordinateBufferIndex += vertices * 2;
       this._positionBufferIndex += vertices * 2;
       this._clearPathBuffer();
-      var color = BLACK;
+      var color = parseFillColor(this._fillStyle);
       for (var i = 0; i < vertices; i++) {
         this._colorBuffer.set(color, this._colorBufferIndex);
         this._colorBufferIndex += 4;
@@ -614,6 +666,17 @@ var CanvasWebGLContext = CanvasWebGLContext || (function (document, undefined) {
     var BLACK = new Float32Array([0, 0, 0, 0]);
     var RED = new Float32Array([1, 0, 0, 0.5]);
 
+    function parseFillColor(color) {
+      color = parseColor(color);
+      if (settings.alpha) {
+        var alpha = new Float32Array(4);
+        alpha.set(color, 0);
+        alpha[3] /= 2;
+        color = alpha;
+      }
+      return color;
+    }
+
     function fillBuffer(buffer, index, length, value) {
       value = value || 0;
       for (var i = 0; i < length; i++) {
@@ -636,7 +699,7 @@ var CanvasWebGLContext = CanvasWebGLContext || (function (document, undefined) {
       this._createTransformedRectangleVertices(this._positionBuffer, this._positionBufferIndex, x, y, w, h);
       this._positionBufferIndex += 12;
 
-      var color = nextColor();
+      var color = parseFillColor(this._fillStyle);
       for (var i = 0; i < 6; i++) {
         this._colorBuffer.set(color, this._colorBufferIndex);
         this._colorBufferIndex += 4;
@@ -715,6 +778,13 @@ var CanvasWebGLContext = CanvasWebGLContext || (function (document, undefined) {
 
     canvasWebGLContext.prototype.scale = function scale(x, y) {
       settings.debug && writer.writeLn("scale " + toSafeArrayString(arguments));
+      var m = this._currentTransformStack;
+      var o = this._currentTransformStackIndex;
+      this.setTransform(
+        m[0] * x, m[1] * x,
+        m[2] * y, m[3] * y,
+        m[4], m[5]
+      );
     };
 
     canvasWebGLContext.prototype.rotate = function rotate(angle) {
