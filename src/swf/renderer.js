@@ -15,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-/*global rgbaObjToStr, FirefoxCom, Timer, FrameCounter, metrics, coreOptions, OptionSet, Option, appendToFrameTerminal, frameWriter, randomStyle*/
+/*global rgbaObjToStr, FirefoxCom, Timer, FrameCounter, metrics, coreOptions, OptionSet, Option, appendToFrameTerminal, frameWriter, randomStyle, CanvasWebGLContext*/
 
 var rendererOptions = coreOptions.register(new OptionSet("Renderer Options"));
 var traceRenderer = rendererOptions.register(new Option("", "traceRenderer", "number", 0, "trace renderer execution"));
@@ -763,7 +763,7 @@ function renderStage(stage, ctx, events) {
         if (!disableRenderVisitor.value) {
           timelineEnter("RENDER");
           traceRenderer.value && frameWriter.enter("> Render Visitor");
-          if (ctx instanceof CanvasWebGLContext) {
+          if (ctx.isGlContext) {
             ctx.initialize();
             (new RenderVisitor(stage, ctx, invalidPath, refreshStage)).start();
             ctx.flush();

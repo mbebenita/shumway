@@ -104,7 +104,7 @@ function parseColor(color) {
   var span = document.createElement('span');
   document.body.appendChild(span);
   span.style.backgroundColor = color;
-  var rgb = getComputedStyle(span).backgroundColor;
+  var rgb = window.getComputedStyle(span).backgroundColor;
   document.body.removeChild(span);
   var m = /^rgb\((\d+), (\d+), (\d+)\)$/.exec(rgb);
   if (!m) m = /^rgba\((\d+), (\d+), (\d+), ([\d.]+)\)$/.exec(rgb);
@@ -113,5 +113,6 @@ function parseColor(color) {
   result[1] = parseFloat(m[2]) / 255;
   result[2] = parseFloat(m[3]) / 255;
   result[3] = m[4] ? parseFloat(m[4]) : 1;
-  return colorCache[color] = result;
+  colorCache[color] = result;
+  return result;
 }

@@ -29,7 +29,7 @@ var FPS = (function () {
   }
 
   fps.prototype.setFrameRate = function setFrameRate(frameRate) {
-    var scale = 4;
+    var scale = 2;
     this.frameRate = frameRate;
     this.maxFrameTime = scale * 1000 * 2 / frameRate;
   };
