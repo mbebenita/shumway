@@ -13,8 +13,11 @@
   <script src="../../src/avm2/util.js"></script>
   <script src="../../src/swf/util.js"></script>
   <script src="../../src/flash/util.js"></script>
+  <script src="../../src/swf/gl/lib/tessellate.asm.js"></script>
+  <script src="../../src/swf/gl/lib/tessellate.js"></script>
   <script src="../../src/swf/gl/geom.js"></script>
   <script src="../../src/swf/gl/canvas-gl.js"></script>
+
   <script src="../inspector/js/classes/FPS.js"></script>
   <script src="../inspector/js/classes/Terminal.js"></script>
   <style>
@@ -37,13 +40,75 @@
     <canvas id="fpsCanvas" height="100" style="background-color: #333333;"></canvas>
   </div>
   <div>
-    <canvas id="stageCanvas" width="768" height="768"></canvas>
+    <canvas id="canvas" width="512" height="512" style="padding: 10px"></canvas>
+    <canvas id="canvas-gl" width="512" height="512" style="padding: 10px"></canvas>
   </div>
   <div id="debugInfoContainer">
     <canvas id="traceTerminal" width="600" height="800" tabindex='2'></canvas>
   </div>
 
   <script>
+
+    var canvas = document.getElementById("canvas");
+    var canvasWebGL = document.getElementById("canvas-gl");
+
+    var Multiple = (function () {
+      function constructor(contexts) {
+        this.contexts = contexts;
+      }
+      function defineFunctionProxy(obj, name) {
+        Object.defineProperty(obj, name, {
+          value: function () {
+            var args = arguments;
+            this.contexts.forEach(function (c) {
+              c[name] && c[name].apply(c, args);
+            })
+          }
+        });
+      }
+      function definePropertyProxy(obj, name) {
+        Object.defineProperty(obj, name, {
+          get: function () {
+            return this.contexts[0][name];
+          },
+          set: function (v) {
+            this.contexts.forEach(function (c) {
+              c[name] = v;
+            });
+          }
+        });
+      }
+      definePropertyProxy(constructor.prototype, 'strokeStyle');
+      definePropertyProxy(constructor.prototype, 'fillStyle');
+      definePropertyProxy(constructor.prototype, 'lineWidth');
+      defineFunctionProxy(constructor.prototype, 'clearRect');
+      defineFunctionProxy(constructor.prototype, 'fillRect');
+      defineFunctionProxy(constructor.prototype, 'beginPath');
+      defineFunctionProxy(constructor.prototype, 'moveTo');
+      defineFunctionProxy(constructor.prototype, 'lineTo');
+      defineFunctionProxy(constructor.prototype, 'quadraticCurveTo');
+      defineFunctionProxy(constructor.prototype, 'arc');
+      defineFunctionProxy(constructor.prototype, 'stroke');
+      defineFunctionProxy(constructor.prototype, 'scale');
+      defineFunctionProxy(constructor.prototype, 'save');
+      defineFunctionProxy(constructor.prototype, 'restore');
+      defineFunctionProxy(constructor.prototype, 'translate');
+      defineFunctionProxy(constructor.prototype, 'rotate');
+
+      defineFunctionProxy(constructor.prototype, 'initialize');
+      defineFunctionProxy(constructor.prototype, 'flush');
+      defineFunctionProxy(constructor.prototype, 'fill');
+
+      defineFunctionProxy(constructor.prototype, 'setTransform');
+      defineFunctionProxy(constructor.prototype, 'transform');
+      return constructor;
+    })();
+
+    var canvasContext = canvas.getContext("2d");
+    var canvasWebGLContext = canvasWebGL.getContext("2d.gl");
+
+    var ctx = new Multiple([canvasContext, canvasWebGLContext]);
+
     var traceTerminal = new Terminal(document.getElementById("traceTerminal")); traceTerminal.refreshEvery(100);
     function appendToTraceTerminal(str, color) {
       var scroll = traceTerminal.isScrolledToBottom();
@@ -79,56 +144,7 @@
     var fps = new FPS(document.getElementById("fpsCanvas"));
     fps.setFrameRate(60);
     fps.refreshEvery(10);
-
-    var canvas = document.getElementById("stageCanvas");
-    var context = canvas.getContext("2d.gl");
-
-//    window.addEventListener('resize', function () {
-//      // resizeHandler();
-//    }, false);
-
-    // resizeHandler();
-
-    function resizeHandler() {
-      var parent = canvas.parentElement;
-      this.cw = parent.offsetWidth;
-      this.ch = parent.offsetHeight - 1;
-
-      var devicePixelRatio = window.devicePixelRatio || 1;
-      var backingStoreRatio = context.webkitBackingStorePixelRatio ||
-          context.mozBackingStorePixelRatio ||
-          context.msBackingStorePixelRatio ||
-          context.oBackingStorePixelRatio ||
-          context.backingStorePixelRatio || 1;
-
-      if (devicePixelRatio !== backingStoreRatio) {
-        var ratio = devicePixelRatio / backingStoreRatio;
-        context.width = canvas.width = this.cw * ratio;
-        context.height = canvas.height = this.ch * ratio;
-        canvas.style.width = this.cw + 'px';
-        canvas.style.height = this.ch + 'px';
-        context.scale(ratio, ratio);
-      } else {
-        context.width = canvas.width = this.cw;
-        context.height = canvas.height = this.ch;
-      }
-
-      var cssScale = 'scale(' + (0.25) + ', ' + (0.25) + ')';
-      var style =
-          '-moz-transform: ' + cssScale + ';' +
-              '-webkit-transform: ' + cssScale + ';' +
-              'transform: ' + cssScale + ';' +
-              '-moz-transform-origin: 0% 0%;' +
-              '-webkit-transform-origin: 0% 0%;' +
-              'transform-origin: 0% 0%;';
-      context._updateViewport();
-      // canvas.setAttribute('style', style);
-
-      // context.font = 11 + 'px Consolas, "Liberation Mono", Courier, monospace';
-    }
-
-
-    context.font = 14 + 'px Consolas, "Liberation Mono", Courier, monospace';
+    ctx.font = 14 + 'px Consolas, "Liberation Mono", Courier, monospace';
 
     var w = 32;
     var h = 32;
@@ -146,12 +162,12 @@
     function addActors(count) {
       for (var i = 0; i < count; i++) {
         world.push({
-          x: Math.random() * (canvas.width - w),
-          y: 30 + Math.random() * (canvas.height - h - 30),
+          x: Math.random() * 0.2 * (canvas.width - w),
+          y: 30 + Math.random() * 0.2 * (canvas.height - h - 30),
           r: 0,
           dx: (0.5 - Math.random()) * 1,
           dy: (0.5 - Math.random()) * 1,
-          dr: Math.random() * 0.1
+          dr: Math.random() * 0.01
         });
       }
     }
@@ -164,7 +180,7 @@
     function initializeWorld() {
       if (!world) {
         world = [];
-        addActors(10);
+        addActors(1);
       }
     }
 
@@ -181,17 +197,13 @@
     }
 
     function renderWorld() {
-      // console.info("HERE");
-      // console.info("MEMORY: " + performance.memory.usedJSHeapSize);
       initializeWorld();
-      // insertAll();
-      // deleteAll();
-      context.fillStyle = "black";
-      context.fillRect(0, 0, canvas.width, canvas.height);
-      context.fillStyle = "white";
-      context.initialize();
+      ctx.fillStyle = "black";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = "white";
+      ctx.initialize  ();
       world.forEach(function (actor) {
-        context.save();
+        ctx.save();
         if (actor.x + actor.dx + w > canvas.width || actor.x + actor.dx < 0) {
           actor.dx *= -1;
         }
@@ -201,25 +213,37 @@
         actor.x += actor.dx;
         actor.y += actor.dy;
         actor.r += actor.dr;
-        context.translate(actor.x, actor.y);
-        context.rotate(actor.r);
-        context.translate(-w / 2, -h / 2);
-        context.fillRect(0, 0, w, h);
+        // ctx.translate(actor.x, actor.y);
+        // ctx.rotate(actor.r);
+        // ctx.scale(0.5, 0.5);
+        // ctx.translate(-w / 4, -h / 4);
+        ctx.fillStyle = "orange";
 
-        context.beginPath();
-        context.arc(75,75,50,0,Math.PI*2,true); // Outer circle
-        context.moveTo(110,75);
-        context.arc(75,75,35,0,Math.PI,false);  // Mouth (clockwise)
-        context.moveTo(65,65);
-        context.arc(60,65,5,0,Math.PI*2,true);  // Left eye
-        context.moveTo(95,65);
-        context.arc(90,65,5,0,Math.PI*2,true);  // Right eye
-        context.stroke();
 
-        context.restore();
+//        ctx.moveTo(100, 100);
+//        ctx.lineTo(200, 100);
+//        ctx.lineTo(200, 200);
+
+//        ctx.moveTo(300, 300);
+//        ctx.lineTo(400, 300);
+//        ctx.lineTo(400, 400);
+
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.quadraticCurveTo(100, 400, 100, 0);
+        ctx.fill();
+
+//        ctx.lineTo(200, 100);
+//        ctx.lineTo(150, 150);
+//        ctx.lineTo(200, 200);
+//        ctx.lineTo(300, 150);
+//        ctx.lineTo(100, 200);
+
+
+        ctx.restore();
       });
 
-      context.flush();
+      ctx.flush();
       // context.fillText("Actors: " + world.length, 10, 20);
     }
   </script>

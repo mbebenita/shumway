@@ -1489,3 +1489,18 @@ var CircularBuffer = (function () {
   };
   return circularBuffer;
 })();
+
+/**
+ * @param array {ArrayBufferView}
+ * @param index {number}
+ * @param length {number}
+ * @returns {number}
+ */
+function hashArray(array, index, length) {
+  var buffer = new Uint8Array(array.buffer, array.byteOffset + index * array.BYTES_PER_ELEMENT);
+  var hash = 0;
+  for (var i = 0, j = length * array.BYTES_PER_ELEMENT; i < j; i++) {
+    hash = (((31 * hash) | 0) + buffer[i]) | 0;
+  }
+  return hash;
+}

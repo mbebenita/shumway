@@ -11,6 +11,10 @@ var CanvasWebGLContext = CanvasWebGLContext || (function (document, undefined) {
   var blendOption = webGLOptions.register(new Option("", "blend", "boolean", true, "enables blending"));
   var alphaOption = webGLOptions.register(new Option("", "alpha", "boolean", false, "makes all colors transparent"));
   var tessellatorOption = webGLOptions.register(new Option("", "tessellator", "boolean", false, "tessellate with glu tessellator"));
+  var cacheTessellationOption = webGLOptions.register(new Option("", "cacheTessellation", "boolean", true, "cache tessellations"));
+  var stencilOption = webGLOptions.register(new Option("", "stencilOption", "boolean", false, "cache tessellations"));
+
+  var drawOption = webGLOptions.register(new Option("", "draw", "boolean", true, "draw"));
 
   var nativeGetContext = HTMLCanvasElement.prototype.getContext;
 
@@ -78,21 +82,7 @@ var CanvasWebGLContext = CanvasWebGLContext || (function (document, undefined) {
       ]);
     }
 
-    function createRectangleVertices(result, index, x, y, w, h) {
-      result[index +  0] = x;
-      result[index +  1] = y;
-      result[index +  2] = x + w;
-      result[index +  3] = y;
-      result[index +  4] = x;
-      result[index +  5] = y + h;
 
-      result[index +  6] = x;
-      result[index +  7] = y + h;
-      result[index +  8] = x + w;
-      result[index +  9] = y;
-      result[index + 10] = x + w;
-      result[index + 11] = y + h;
-    }
 
     var writer = new IndentingWriter(false, function (str) {
       console.log(str);
@@ -110,7 +100,8 @@ var CanvasWebGLContext = CanvasWebGLContext || (function (document, undefined) {
       this.resetTransform();
       var gl = this._gl = canvas.getContext("experimental-webgl", {
         preserveDrawingBuffer: true,
-        antialias: true
+        antialias: true,
+        stencil: true
       });
       assert (gl);
       this._gl.viewport(0, 0, this._width, this._height);
@@ -139,6 +130,8 @@ var CanvasWebGLContext = CanvasWebGLContext || (function (document, undefined) {
       this._pathBufferI32 = new Int32Array(this._pathBuffer);
       this._pathBufferF32 = new Float32Array(this._pathBuffer);
       this._pathBufferIndex = 0;
+      this._pathCurrentX = 0;
+      this._pathCurrentY = 0;
 
       this._scratchCanvas = window.document.createElement("canvas");
       this._scratchCanvas.width = 128;
@@ -153,7 +146,7 @@ var CanvasWebGLContext = CanvasWebGLContext || (function (document, undefined) {
 
     var MOVE_TO = 0x01;
     var LINE_TO = 0x02;
-    var CLOSE_PATH = 0x03;
+    var CLOSE_PATH = 0x04;
 
     canvasWebGLContext.prototype._bufferPathCommand = function _bufferPathCommand(command, a, b, c, d) {
       var i32 = this._pathBufferI32;
@@ -216,6 +209,7 @@ var CanvasWebGLContext = CanvasWebGLContext || (function (document, undefined) {
       var ox = 0, oy = 0;
       var lx = 0, ly = 0;
       var cx = 0, cy = 0;
+      var cpx = 0, cpy = 0;
       var first = true;
       var triangles = 0;
       var i = 0;
@@ -233,13 +227,12 @@ var CanvasWebGLContext = CanvasWebGLContext || (function (document, undefined) {
             if (first) {
               first = false;
             } else {
-              result[index + 0] = ox;
-              result[index + 1] = oy;
-              result[index + 2] = lx;
-              result[index + 3] = ly;
-              result[index + 4] = cx;
-              result[index + 5] = cy;
-              index += 6;
+              result[index ++] = ox;
+              result[index ++] = oy;
+              result[index ++] = lx;
+              result[index ++] = ly;
+              result[index ++] = cx;
+              result[index ++] = cy;
               triangles ++;
             }
             lx = cx; ly = cy;
@@ -249,11 +242,52 @@ var CanvasWebGLContext = CanvasWebGLContext || (function (document, undefined) {
       return triangles;
     };
 
+    function hashFeatures(features) {
+      return hashArray(features, 0, features.length);
+    }
+
+    function hashPolygonLoop(loop) {
+      var v = loop;
+      var a = [];
+      var sum = (v[0] + v[2]) * (v[1] - v[3]);
+      for (var i = 2; i < v.length; i += 2) {
+        sum += (v[i - 2] + v[i]) * (v[i - 1] - v[i + 1]);
+        a.push(sum + (v[i] + v[1]) * (v[i + 1] - v[1]));
+      }
+      var c = a.pop();
+      for (var i = 0; i < a.length; i++) {
+        a[i] /= c;
+      }
+      return hashFeatures(new Float32Array(a));
+    }
+
+    function hashPolygon(polygon) {
+      var hashes = new Int32Array(polygon.length);
+      for (var i = 0; i < polygon.length; i++) {
+        hashes[i] = hashPolygonLoop(polygon[i]);
+      }
+      return hashArray(hashes, 0, hashes.length);
+    }
+
+    var tessellationCache = createEmptyObject();
+    canvasWebGLContext.prototype._gluTessellate = function _gluTessellate(polygon) {
+      if (cacheTessellationOption.value) {
+        var hash = hashPolygon(polygon);
+        if (tessellationCache[hash]) {
+          return tessellationCache[hash];
+        }
+        console.info("Caching Tessellation: " + hash);
+        var tessellation = tessellationCache[hash] = tessellate(polygon);
+        return tessellation
+      }
+      return tessellate(polygon);
+    };
+
     canvasWebGLContext.prototype._gluTessellateCurrentPathBufferFill = function _gluTessellateCurrentPathBufferFill(result, index) {
       var i32 = this._pathBufferI32;
       var f32 = this._pathBufferF32;
 
-      var loops = [];
+      var polygon = [];
       var loop;
       var i = 0;
       while (i < this._pathBufferIndex) {
@@ -261,7 +295,7 @@ var CanvasWebGLContext = CanvasWebGLContext || (function (document, undefined) {
         switch (command) {
           case MOVE_TO:
             if (loop) {
-              loops.push(loop);
+              polygon.push(loop);
             }
             loop = [];
             loop.push(f32[i++]);
@@ -274,9 +308,10 @@ var CanvasWebGLContext = CanvasWebGLContext || (function (document, undefined) {
         }
       }
       assert (loop);
-      loops.push(new Float32Array(loop));
 
-      var tessellation = tessellate(loops);
+      polygon.push(new Float32Array(loop));
+
+      var tessellation = this._gluTessellate(polygon);
       var triangles = tessellation.triangles;
       var vertices = tessellation.vertices;
 
@@ -447,45 +482,6 @@ var CanvasWebGLContext = CanvasWebGLContext || (function (document, undefined) {
       this.f = f;
     }
 
-    function invertTransform(result, index) {
-      var m = result;
-      var i = index;
-      var m11 = m[i + 0];
-      var m12 = m[i + 1];
-      var m21 = m[i + 2];
-      var m22 = m[i + 3];
-      var dx = m[i + 4];
-      var dy = m[i + 5];
-      if (m12 === 0.0 && m21 === 0.0) {
-        m11 = 1.0 / m11;
-        m22 = 1.0 / m22;
-        m12 = m21 = 0.0;
-        dx = -m11 * dx;
-        dy = -m22 * dy;
-      } else {
-        var a = m11, b = m12, c = m21, d = m22;
-        var determinant = a * d - b * c;
-        if (determinant === 0.0) {
-          assert(false);
-          return;
-        }
-        determinant = 1.0 / determinant;
-        m11 =  d * determinant;
-        m12 = -b * determinant;
-        m21 = -c * determinant;
-        m22 =  a * determinant;
-        var ty = -(m12 * dx + m22 * dy);
-        dx = -(m11 * dx + m21 * dy);
-        dy = ty;
-      }
-      m[i + 0] = m11;
-      m[i + 1] = m12;
-      m[i + 2] = m21;
-      m[i + 3] = m22;
-      m[i + 4] = dx;
-      m[i + 5] = dy;
-    }
-
     Object.defineProperty(canvasWebGLContext.prototype, "currentTransform", {
       get: function() {
         var m = this._currentTransformStack;
@@ -511,7 +507,6 @@ var CanvasWebGLContext = CanvasWebGLContext || (function (document, undefined) {
         return;
       }
       var gl = this._gl;
-
       this._createTransformedRectangleVertices(this._positionBuffer, this._positionBufferIndex, dx, dy, dw, dh);
       var bounds = this._loadTexture(image).clone();
       bounds.scale(1 / 1024);
@@ -578,39 +573,18 @@ var CanvasWebGLContext = CanvasWebGLContext || (function (document, undefined) {
         var bounds = this._loadTexture(this._fillStyle.image).clone();
         this._mapTexture(this._coordinateBuffer, this._coordinateBufferIndex, this._positionBuffer, this._positionBufferIndex, vertices, bounds);
       }
+      var color = parseFillColor(this._fillStyle);
       this._coordinateBufferIndex += vertices * 2;
       this._positionBufferIndex += vertices * 2;
-      this._clearPathBuffer();
-      var color = parseFillColor(this._fillStyle);
       for (var i = 0; i < vertices; i++) {
         this._colorBuffer.set(color, this._colorBufferIndex);
         this._colorBufferIndex += 4;
       }
     };
 
-    var once = false;
     canvasWebGLContext.prototype.stroke = function stroke() {
       var gl = this._gl;
       traceOption.value >= TRACE_VERBOSE && writer.writeLn("stroke " + toSafeArrayString(arguments));
-      return;
-      if (!once) {
-        this._scratchContext.stroke();
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this._scratchCanvas);
-        once = true;
-      }
-
-      this._createTransformedRectangleVertices(this._positionBuffer, this._positionBufferIndex, 0, 0, 32, 32);
-      this._positionBufferIndex += 12;
-
-      var color = nextColor();
-      for (var i = 0; i < 6; i++) {
-        this._colorBuffer.set(color, this._colorBufferIndex);
-        this._colorBufferIndex += 4;
-      }
-
-      createRectangleVertices(this._coordinateBuffer, this._coordinateBufferIndex, 0, 0, 1, 1);
-      this._coordinateBufferIndex += 12;
-
     };
 
     canvasWebGLContext.prototype.transform = function transform(m11, m12, m21, m22, dx, dy) {
@@ -626,17 +600,6 @@ var CanvasWebGLContext = CanvasWebGLContext || (function (document, undefined) {
         m[o + 1] *  dx + m[o + 3] * dy + m[o + 5]
       );
     };
-
-    function transformVertices(result, index, transform, transformIndex, length) {
-      var m = transform;
-      var o = transformIndex;
-      for (var i = 0, j = length * 2; i < j; i += 2) {
-        var x = result[index + i];
-        var y = result[index + i + 1];
-        result[index + i]     = m[o + 0] * x + m[o + 2] * y + m[o + 4];
-        result[index + i + 1] = m[o + 1] * x + m[o + 3] * y + m[o + 5];
-      }
-    }
 
     canvasWebGLContext.prototype._transformVertices = function(result, index, length) {
       transformVertices(result, index, this._currentTransformStack, this._currentTransformStackIndex, length);
@@ -682,21 +645,6 @@ var CanvasWebGLContext = CanvasWebGLContext || (function (document, undefined) {
       return color;
     }
 
-    function fillBuffer(buffer, index, length, value) {
-      value = value || 0;
-      for (var i = 0; i < length; i++) {
-        buffer[index + i] = value;
-      }
-    }
-
-    function copyBuffer(dst, dstIndex, src, srcIndex, length) {
-      for (var i = 0; i < length; i++) {
-        dst[dstIndex] = src[srcIndex];
-        dstIndex ++;
-        srcIndex ++;
-      }
-    }
-
     canvasWebGLContext.prototype.fillRect = function fillRect(x, y, w, h) {
       traceOption.value >= TRACE_VERBOSE && writer.writeLn("fillRect " + toSafeArrayString(arguments));
       var gl = this._gl;
@@ -732,43 +680,73 @@ var CanvasWebGLContext = CanvasWebGLContext || (function (document, undefined) {
       }
       gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
       gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+      this._colorBufferIndex = 0;
+      this._positionBufferIndex = 0;
+      this._coordinateBufferIndex = 0;
     };
 
     canvasWebGLContext.prototype.flush = function flush() {
       var gl = this._gl;
-      gl.bindBuffer(gl.ARRAY_BUFFER, this._positionGLBuffer);
-      gl.bufferData(gl.ARRAY_BUFFER, this._positionBuffer.subarray(0, this._positionBufferIndex), gl.DYNAMIC_DRAW);
+      if (drawOption.value) {
+        gl.bindBuffer(gl.ARRAY_BUFFER, this._positionGLBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, this._positionBuffer.subarray(0, this._positionBufferIndex), gl.DYNAMIC_DRAW);
 
-      var position = this._program.attributes.aPosition.location;
-      gl.enableVertexAttribArray(position);
-      gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0);
+        var position = this._program.attributes.aPosition.location;
+        gl.enableVertexAttribArray(position);
+        gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0);
 
-      gl.bindBuffer(gl.ARRAY_BUFFER, this._colorGLBuffer);
-      gl.bufferData(gl.ARRAY_BUFFER, this._colorBuffer.subarray(0, this._colorBufferIndex), gl.DYNAMIC_DRAW);
+        gl.bindBuffer(gl.ARRAY_BUFFER, this._colorGLBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, this._colorBuffer.subarray(0, this._colorBufferIndex), gl.DYNAMIC_DRAW);
 
-      var color = this._program.attributes.aColor.location;
-      gl.enableVertexAttribArray(color);
-      gl.vertexAttribPointer(color, 4, gl.FLOAT, false, 0, 0);
+        var color = this._program.attributes.aColor.location;
+        gl.enableVertexAttribArray(color);
+        gl.vertexAttribPointer(color, 4, gl.FLOAT, false, 0, 0);
 
-      gl.bindBuffer(gl.ARRAY_BUFFER, this._coordinateGLBuffer);
-      gl.bufferData(gl.ARRAY_BUFFER, this._coordinateBuffer.subarray(0, this._coordinateBufferIndex), gl.DYNAMIC_DRAW);
+        gl.bindBuffer(gl.ARRAY_BUFFER, this._coordinateGLBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, this._coordinateBuffer.subarray(0, this._coordinateBufferIndex), gl.DYNAMIC_DRAW);
 
-      var coordinate = this._program.attributes.aCoordinate.location;
-      gl.enableVertexAttribArray(coordinate);
-      gl.vertexAttribPointer(coordinate, 2, gl.FLOAT, false, 0, 0);
+        var coordinate = this._program.attributes.aCoordinate.location;
+        gl.enableVertexAttribArray(coordinate);
+        gl.vertexAttribPointer(coordinate, 2, gl.FLOAT, false, 0, 0);
 
-      var sampler = this._program.uniforms.uSampler.location;
-      gl.activeTexture(gl.TEXTURE0);
-      gl.bindTexture(gl.TEXTURE_2D, this._texture);
-      gl.uniform1i(sampler, 0);
+        var sampler = this._program.uniforms.uSampler.location;
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, this._texture);
+        gl.uniform1i(sampler, 0);
 
-      gl.drawArrays(gl.TRIANGLES, 0, this._positionBufferIndex / 2);
 
+        if (stencilOption.value) {
+          gl.enable(gl.STENCIL_TEST);
+          gl.clear(gl.DEPTH_BUFFER_BIT | gl.COLOR_BUFFER_BIT | gl.STENCIL_BUFFER_BIT);
+          gl.depthMask(false);
+          gl.stencilMask(255);
+          gl.colorMask(false, false, false, false);
+          gl.stencilFunc(gl.ALWAYS, 0, 255);
+          gl.stencilOpSeparate(gl.FRONT, gl.INCR_WRAP, gl.INCR_WRAP, gl.INCR_WRAP);
+          gl.stencilOpSeparate(gl.BACK, gl.DECR_WRAP, gl.DECR_WRAP, gl.DECR_WRAP);
+
+          gl.drawArrays(gl.TRIANGLES, 0, this._positionBufferIndex / 2);
+
+          gl.depthMask(true);
+          gl.colorMask(true, true, true, true);
+          gl.stencilFunc(gl.NOTEQUAL, 0, (0 === 0) ? 1 : 255);
+          gl.stencilOp(gl.KEEP, gl.KEEP, gl.KEEP);
+
+
+          gl.bindBuffer(gl.ARRAY_BUFFER, this._positionGLBuffer);
+          createRectangleVertices(this._positionBuffer, 0, 0, 0, 1024, 1024);
+          gl.bufferData(gl.ARRAY_BUFFER, this._positionBuffer.subarray(0, 12), gl.DYNAMIC_DRAW);
+          gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+          gl.disable(gl.STENCIL_TEST);
+
+        } else {
+          gl.drawArrays(gl.TRIANGLES, 0, this._positionBufferIndex / 2);
+        }
+      }
       assert (this._positionBufferIndex === this._coordinateBufferIndex &&
               this._positionBufferIndex === this._colorBufferIndex / 2);
-      this._colorBufferIndex = 0;
-      this._positionBufferIndex = 0;
-      this._coordinateBufferIndex = 0;
       nextColorCount = 0;
     }
 
@@ -786,9 +764,9 @@ var CanvasWebGLContext = CanvasWebGLContext || (function (document, undefined) {
       var m = this._currentTransformStack;
       var o = this._currentTransformStackIndex;
       this.setTransform(
-        m[0] * x, m[1] * x,
-        m[2] * y, m[3] * y,
-        m[4], m[5]
+        m[o + 0] * x, m[o + 1] * x,
+        m[o + 2] * y, m[o + 3] * y,
+        m[o + 4], m[o + 5]
       );
     };
 
@@ -823,15 +801,28 @@ var CanvasWebGLContext = CanvasWebGLContext || (function (document, undefined) {
     canvasWebGLContext.prototype.moveTo = function (x, y) {
       traceOption.value >= TRACE_VERBOSE && writer.writeLn("moveTo " + toSafeArrayString(arguments));
       this._bufferPathCommand(MOVE_TO, x, y);
+      this._pathCurrentX = x;
+      this._pathCurrentY = y;
     };
 
     canvasWebGLContext.prototype.lineTo = function (x, y) {
       traceOption.value >= TRACE_VERBOSE && writer.writeLn("lineTo " + toSafeArrayString(arguments));
       this._bufferPathCommand(LINE_TO, x, y);
+      this._pathCurrentX = x;
+      this._pathCurrentY = y;
     };
 
+    var tmp = new Float32Array(1024);
     canvasWebGLContext.prototype.quadraticCurveTo = function (cpx, cpy, x, y) {
       traceOption.value >= TRACE_VERBOSE && writer.writeLn("quadraticCurveTo " + toSafeArrayString(arguments));
+      var index = createQuadraticCurveVertices(tmp, 0, this._pathCurrentX, this._pathCurrentY, cpx, cpy, x, y, 0);
+      tmp[index ++] = x;
+      tmp[index ++] = y;
+      for (var i = 0; i < index; i += 2) {
+        this._bufferPathCommand(LINE_TO, tmp[i], tmp[i + 1]);
+      }
+      this._pathCurrentX = x;
+      this._pathCurrentY = y;
     };
 
     canvasWebGLContext.prototype.bezierCurveTo = function (cp1x, cp1y, cp2x, cp2y, x, y) {
@@ -840,8 +831,6 @@ var CanvasWebGLContext = CanvasWebGLContext || (function (document, undefined) {
 
     canvasWebGLContext.prototype.arc = function (x1, y1, x2, y2, radius) {
       traceOption.value >= TRACE_VERBOSE && writer.writeLn("arcTo " + toSafeArrayString(arguments));
-      if (once) return;
-      this._scratchContext.arc(x1, y1, x2, y2, radius);
     };
 
     canvasWebGLContext.prototype.rect = function (x, y, w, h) {
