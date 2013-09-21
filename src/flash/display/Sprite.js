@@ -173,6 +173,7 @@ var SpriteDefinition = (function () {
           if (!loader._isAvm2Enabled) {
             this._initAvm1Bindings(instance, name, symbolInfo.events);
             instance._dispatchEvent("init");
+            instance._dispatchEvent("construct");
           }
 
           instance._dispatchEvent("load");
@@ -215,6 +216,7 @@ var SpriteDefinition = (function () {
       if (!loader._isAvm2Enabled) {
         parent._initAvm1Bindings(instance, name, symbolInfo && symbolInfo.events);
         instance._dispatchEvent("init");
+        instance._dispatchEvent("construct");
       }
 
       instance._dispatchEvent("load");
@@ -230,6 +232,13 @@ var SpriteDefinition = (function () {
     _insertChildAtDepth: function (child, depth) {
       // TODO insert with specific depth
       this.addChild(child);
+      var name = child._name;
+      var loader = this._loader;
+      // HACK attempting to add movie clip as a variable
+      if (name && loader && !loader._isAvm2Enabled &&
+          !this._getAS2Object().asHasProperty(undefined, name, 0, true)) {
+        this._getAS2Object().asSetPublicProperty(name, child._getAS2Object());
+      }
     },
     _initAvm1Bindings: function (instance, name, events) {
       var loader = this._loader;
@@ -302,8 +311,7 @@ var SpriteDefinition = (function () {
       }
 
       if (name) {
-        this._getAS2Object().asSetProperty(undefined, name, 0,
-          instance._getAS2Object());
+        this._getAS2Object().asSetPublicProperty(name, instance._getAS2Object());
       }
     },
 

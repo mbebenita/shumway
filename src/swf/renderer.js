@@ -355,19 +355,31 @@ RenderingColorTransform.prototype = {
   },
   setFillStyle: function (ctx, style) {
     if (this.mode === 'complex') {
-      style = this.convertColor(style);
+      style = typeof style === 'function' ? style(ctx, this) : this.convertColor(style);
     } else if (typeof style === 'number') {
       style = this.convertNumericColor(style);
+    } else if (typeof style === 'function') {
+      style = style.defaultGradient;
     }
     ctx.fillStyle = style;
   },
   setStrokeStyle: function (ctx, style) {
     if (this.mode === 'complex') {
+      style = typeof style === 'function' ? style(ctx, this) : this.convertColor(style);
+    } else if (typeof style === 'number') {
+      style = this.convertNumericColor(style);
+    } else if (typeof style === 'function') {
+      style = style.defaultGradient;
+    }
+    ctx.strokeStyle = style;
+  },
+  addGradientColorStop: function (gradient, ratio, style) {
+    if (this.mode === 'complex') {
       style = this.convertColor(style);
     } else if (typeof style === 'number') {
       style = this.convertNumericColor(style);
     }
-    ctx.strokeStyle = style;
+    gradient.addColorStop(ratio, style);
   },
   setAlpha: function (ctx, force) {
     if (this.mode === 'simple' || force) {
@@ -396,7 +408,6 @@ RenderingColorTransform.prototype = {
       m = [style, style >> 16 & 0xff, style >> 8 & 0xff, style & 0xff, 1.0];
       break;
     default:
-      // TODO gradient
       return style;
     }
 

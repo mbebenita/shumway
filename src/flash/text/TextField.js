@@ -82,7 +82,8 @@ var TextFieldDefinition = (function () {
     var fontAttributes = { FACE: initialFormat.face,
                            LETTERSPACING: initialFormat.letterSpacing,
                            KERNING: initialFormat.kerning,
-                           LEADING: initialFormat.leading
+                           LEADING: initialFormat.leading,
+                           COLOR: initialFormat.color
                          };
     trunk.children[0] = {type: 'FONT', format: fontAttributes, children: []};
     return trunk;
@@ -342,31 +343,31 @@ var TextFieldDefinition = (function () {
       case 'B': format.bold = true; break;
       case 'I': format.italic = true; break;
       case 'FONT':
-        if ('COLOR' in attributes) {
+        if (attributes.COLOR !== undefined) {
           format.color = attributes.COLOR;
         }
-        if ('FACE' in attributes) {
+        if (attributes.FACE !== undefined) {
           format.face = convertFontFamily(attributes.FACE, true);
           metricsChanged = true;
         }
-        if ('SIZE' in attributes) {
+        if (attributes.SIZE !== undefined) {
           format.size = parseFloat(attributes.SIZE);
           metricsChanged = true;
         }
-        if ('LETTERSPACING' in attributes) {
+        if (attributes.LETTERSPACING !== undefined) {
           format.letterspacing = parseFloat(attributes.LETTERSPACING);
         }
-        if ('KERNING' in attributes) {
+        if (attributes.KERNING !== undefined) {
           // TODO: properly parse this in extractAttributes
           format.kerning = attributes.KERNING && true;
         }
-        if ('LEADING' in attributes) {
+        if (attributes.LEADING !== undefined) {
           format.leading = parseFloat(attributes.LEADING);
         }
       /* falls through */
       case 'TEXTFORMAT':
         // `textFormat` has, among others, the same attributes as `font`
-        if ('INDENT' in attributes) {
+        if (attributes.INDENT !== undefined) {
           state.x += attributes.INDENT;
         }
         // TODO: support leftMargin, rightMargin & blockIndent
@@ -451,7 +452,7 @@ var TextFieldDefinition = (function () {
     initialize: function () {
       var initialFormat = this._defaultTextFormat = {
         align: 'LEFT', face: 'serif', size: 12,
-        letterspacing: 0, kerning: 0, color: "black", leading: 0
+        letterspacing: 0, kerning: 0, color: 0, leading: 0
       };
       this._type = 'dynamic';
       this._selectable = true;

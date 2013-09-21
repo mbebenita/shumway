@@ -44,7 +44,7 @@ var DisplayObjectDefinition = (function () {
       this._bbox = null;
       this._bitmap = null;
       this._blendMode = blendModeClass.NORMAL;
-      this._bounds = null;
+      this._bounds = { xMin: 0, xMax: 0, yMin: 0, yMax: 0, invalid: true };
       this._cacheAsBitmap = false;
       this._children = [];
       this._clipDepth = null;
@@ -70,6 +70,7 @@ var DisplayObjectDefinition = (function () {
       this._stage = null;
       this._transform = null;
       this._visible = true;
+      this._hidden = false;
       this._wasCachedAsBitmap = false;
       this._x = 0;
       this._y = 0;
@@ -293,6 +294,13 @@ var DisplayObjectDefinition = (function () {
         }
       }
     },
+    _invalidateBounds: function () {
+      var currentNode = this;
+      while (currentNode && !currentNode._bounds.invalid) {
+        currentNode._bounds.invalid = true;
+        currentNode = currentNode._parent;
+      }
+    },
     _updateCurrentTransform: function () {
       var scaleX = this._scaleX;
       var scaleY = this._scaleY;
@@ -483,7 +491,7 @@ var DisplayObjectDefinition = (function () {
         return;
 
       this._invalidate();
-      this._bounds = null;
+      this._invalidateBounds();
 
       this._rotation = val;
 
@@ -519,7 +527,7 @@ var DisplayObjectDefinition = (function () {
         return;
 
       this._invalidate();
-      this._bounds = null;
+      this._invalidateBounds();
 
       this._scaleX = val;
       this._updateCurrentTransform();
@@ -532,7 +540,7 @@ var DisplayObjectDefinition = (function () {
         return;
 
       this._invalidate();
-      this._bounds = null;
+      this._invalidateBounds();
 
       this._scaleY = val;
       this._updateCurrentTransform();
@@ -564,7 +572,7 @@ var DisplayObjectDefinition = (function () {
     set transform(val) {
       this._animated = false;
 
-      this._bounds = null;
+      this._invalidateBounds();
 
       var transform = this._transform;
       transform.colorTransform = val.colorTransform;
@@ -625,7 +633,7 @@ var DisplayObjectDefinition = (function () {
       }
 
       this._invalidate();
-      this._bounds = null;
+      this._invalidateBounds();
 
       this._x = this._currentTransform.tx = val;
     },
@@ -638,7 +646,7 @@ var DisplayObjectDefinition = (function () {
       }
 
       this._invalidate();
-      this._bounds = null;
+      this._invalidateBounds();
 
       this._y = this._currentTransform.ty = val;
     },
@@ -649,7 +657,9 @@ var DisplayObjectDefinition = (function () {
       somewhatImplemented('DisplayObject.z');
     },
     _getContentBounds: function () {
-      if (!this._bounds) {
+      var bounds = this._bounds;
+
+      if (bounds.invalid) {
         var bbox = this._bbox;
 
         var xMin = Number.MAX_VALUE;
@@ -657,15 +667,20 @@ var DisplayObjectDefinition = (function () {
         var yMin = Number.MAX_VALUE;
         var yMax = Number.MIN_VALUE;
 
-        if (!bbox) {
+        if (bbox) {
+          xMin = bbox.xMin;
+          xMax = bbox.xMax;
+          yMin = bbox.yMin;
+          yMax = bbox.yMax;
+        } else {
           var children = this._children;
           var numChildren = children.length;
-          var b;
           for (var i = 0; i < numChildren; i++) {
             var child = children[i];
 
-            if (!child._visible)
+            if (!child._visible) {
               continue;
+            }
 
             var b = child.getBounds(this);
 
@@ -679,16 +694,11 @@ var DisplayObjectDefinition = (function () {
             yMin = Math.min(yMin, y1, y2);
             yMax = Math.max(yMax, y1, y2);
           }
-        } else {
-          xMin = bbox.xMin;
-          xMax = bbox.xMax;
-          yMin = bbox.yMin;
-          yMax = bbox.yMax;
         }
 
         if (this._graphics) {
           var b = this._graphics._getBounds(true);
-          if (b) {
+          if (b.xMin !== b.xMax && b.yMin !== b.yMax) {
             var x1 = b.xMin;
             var y1 = b.yMin;
             var x2 = b.xMax;
@@ -701,17 +711,17 @@ var DisplayObjectDefinition = (function () {
           }
         }
 
-        if (xMin === Number.MAX_VALUE)
+        if (xMin === Number.MAX_VALUE) {
           xMin = xMax = yMin = yMax = 0;
+        }
 
-        this._bounds = {
-          xMin: xMin,
-          xMax: xMax,
-          yMin: yMin,
-          yMax: yMax
-        };
+        bounds.xMin = xMin;
+        bounds.xMax = xMax;
+        bounds.yMin = yMin;
+        bounds.yMax = yMax;
       }
-      return this._bounds;
+
+      return bounds;
     },
     _getRegion: function getRegion() {
       var b = this._graphics ?
