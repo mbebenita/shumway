@@ -4,6 +4,7 @@
   <title></title>
 </head>
 <body style="background-color: #333333;">
+  <script src="flower.js"></script>
   <script src="../../src/avm2/options.js"></script>
   <script>
     var Option = options.Option;
@@ -13,10 +14,14 @@
   <script src="../../src/avm2/util.js"></script>
   <script src="../../src/swf/util.js"></script>
   <script src="../../src/flash/util.js"></script>
+  <script src="../../src/swf/gl/lib/tessellate.asm.js"></script>
+  <script src="../../src/swf/gl/lib/tessellate.js"></script>
   <script src="../../src/swf/gl/geom.js"></script>
+  <script src="../../src/swf/gl/gl.js"></script>
   <script src="../../src/swf/gl/canvas-gl.js"></script>
   <script src="../inspector/js/classes/FPS.js"></script>
   <script src="../inspector/js/classes/Terminal.js"></script>
+  <script src="../inspector/js/classes/dat.gui.min.js"></script>
   <style>
     #debugInfoContainer {
       position: absolute;
@@ -37,7 +42,8 @@
     <canvas id="fpsCanvas" height="100" style="background-color: #333333;"></canvas>
   </div>
   <div>
-    <canvas id="stageCanvas" width="768" height="768"></canvas>
+    <!--<canvas id="stageCanvas" width="712" height="712"></canvas>-->
+    <canvas id="stageCanvas" width="2048" height="1024" style="background-color: white;"></canvas>
   </div>
   <div id="debugInfoContainer">
     <canvas id="traceTerminal" width="600" height="800" tabindex='2'></canvas>
@@ -136,13 +142,6 @@
     var world;
     var root = new QuadTree(0, 0, canvas.width, canvas.height, 0);
 
-    (function render() {
-      fps.enter("FRAME");
-      renderWorld();
-      fps.leave("FRAME");
-      requestAnimationFrame(render);
-    })();
-
     function addActors(count) {
       for (var i = 0; i < count; i++) {
         world.push({
@@ -180,6 +179,7 @@
       }
     }
 
+    /*
     function renderWorld() {
       // console.info("HERE");
       // console.info("MEMORY: " + performance.memory.usedJSHeapSize);
@@ -220,8 +220,76 @@
       });
 
       context.flush();
-      // context.fillText("Actors: " + world.length, 10, 20);
     }
+    */
+
+
+
+    var gui = new dat.GUI();
+    var options = {scale: 1};
+    gui.add(options, "scale").step(0.01).min(0).max(20);
+
+    var path = new GL.SimplePath();
+    // drawCurvyShape(path);
+    // drawShape(path);
+    // drawRandomShape(path, 10);
+
+    var pathGeometry = new GL.Geometry(context);
+
+    function getColor(fill) {
+      var rgb = fill.color;
+      return [
+        ((rgb >> 16) & 0xff) / 255,
+        ((rgb >> 8) & 0xff) / 255,
+        (rgb & 0xff) / 255,
+        fill.alpha / 1
+      ];
+    }
+
+    var t = flower.length;
+    // t = 2;
+    for (var k = 0; k < t; k++) {
+      var shape = flower[k];
+      path = new GL.SimplePath();
+      shape.path.coords.forEach(function (cl) {
+        path.moveTo(cl[0][0], cl[0][1]);
+        for (var i = 1; i < cl.length; i++) {
+          var c = cl[i];
+          if (c.length === 2) {
+            path.lineTo(c[0], c[1]);
+          } else if (c.length === 4) {
+            path.quadraticCurveTo(c[0], c[1], c[2], c[3]);
+          }
+        }
+      });
+      pathGeometry.addFill2(path, getColor(shape.fill));
+    }
+
+    // pathGeometry.addFill(path);
+
+    console.info("T: " + pathGeometry._triangles);
+    var t = 0;
+    function renderWorld() {
+      context.draw([new GL.Command.Clear(context)]);
+      for (var i = 0; i < world.length; i++) {
+        var actor = world[i];
+        actor.x += actor.dx;
+        actor.y += actor.dy;
+        actor.r += actor.dr;
+        context.draw([new GL.Command.Draw(context, pathGeometry, GL.makeTransform(options.scale, options.scale, actor.x, actor.y), i / world.length)]);
+      }
+      t += 0.1;
+    }
+
+    initializeWorld();
+
+    (function render() {
+      fps.enter("FRAME");
+      renderWorld();
+      fps.leave("FRAME");
+      requestAnimationFrame(render);
+    })();
+
   </script>
 </body>
 </html>

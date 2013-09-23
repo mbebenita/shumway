@@ -774,13 +774,7 @@ function renderStage(stage, ctx, events) {
         if (!disableRenderVisitor.value) {
           timelineEnter("RENDER");
           traceRenderer.value && frameWriter.enter("> Render Visitor");
-          if (ctx.isGlContext) {
-            ctx.initialize();
-            (new RenderVisitor(stage, ctx, invalidPath, refreshStage)).start();
-            ctx.flush();
-          } else {
-            (new RenderVisitor(stage, ctx, invalidPath, refreshStage)).start();
-          }
+          (new RenderVisitor(stage, ctx, invalidPath, refreshStage)).start();
           traceRenderer.value && frameWriter.leave("< Render Visitor");
           timelineLeave("RENDER");
         }

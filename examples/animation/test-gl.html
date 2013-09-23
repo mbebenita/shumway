@@ -16,6 +16,7 @@
   <script src="../../src/swf/gl/lib/tessellate.asm.js"></script>
   <script src="../../src/swf/gl/lib/tessellate.js"></script>
   <script src="../../src/swf/gl/geom.js"></script>
+  <script src="../../src/swf/gl/gl.js"></script>
   <script src="../../src/swf/gl/canvas-gl.js"></script>
 
   <script src="../inspector/js/classes/FPS.js"></script>
@@ -152,13 +153,6 @@
     var world;
     var root = new QuadTree(0, 0, canvas.width, canvas.height, 0);
 
-    (function render() {
-      fps.enter("FRAME");
-      renderWorld();
-      fps.leave("FRAME");
-      requestAnimationFrame(render);
-    })();
-
     function addActors(count) {
       for (var i = 0; i < count; i++) {
         world.push({
@@ -244,8 +238,48 @@
       });
 
       ctx.flush();
+
+
       // context.fillText("Actors: " + world.length, 10, 20);
     }
+
+    var path = new GL.SimplePath();
+    // drawShape(path);
+    drawCurvyShape(path);
+//    path.moveTo(0, 0);
+//    path.quadraticCurveTo(100, 400, 200, 100);
+//    path.quadraticCurveTo(300, 500, 400, 100);
+
+    var geom = new GL.Geometry(path, true);
+
+    canvasContext.translate(300, 300);
+    canvasContext.scale(0.8, 0.8);
+
+    function renderCommands() {
+      canvasContext.fillStyle = "black";
+      canvasContext.fillRect(-1000, -10000, canvas.width * 100, canvas.height * 100);
+      canvasContext.fillStyle = "white";
+      canvasContext.beginPath();
+      // path.visit(canvasContext);
+      canvasContext.closePath();
+      canvasContext.stroke();
+
+      canvasContext.beginPath();
+      geom.visitTriangles(canvasContext);
+      canvasContext.strokeStyle = "white";
+      canvasContext.closePath();
+      canvasContext.stroke();
+    }
+
+    (function render() {
+      fps.enter("FRAME");
+      // renderWorld();
+      canvasContext.strokeStyle = "red";
+      renderCommands();
+      // canvasContext.stroke();
+      fps.leave("FRAME");
+      requestAnimationFrame(render);
+    })();
   </script>
 </body>
 </html>
