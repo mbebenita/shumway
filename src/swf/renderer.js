@@ -798,7 +798,7 @@ function renderStage(stage, ctx, events) {
         traceRenderer.value && frameWriter.leave("< Mouse Visitor");
         renderFrame && timelineLeave("MOUSE");
 
-        stage._syncCursor();
+        ctx.canvas.style.cursor = stage._cursor;
       }
 
       if (renderFrame && events.onAfterFrame) {
