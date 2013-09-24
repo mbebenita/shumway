@@ -719,6 +719,7 @@ var DisplayObjectDefinition = (function () {
         bounds.xMax = xMax;
         bounds.yMin = yMin;
         bounds.yMax = yMax;
+        bounds.invalid = false;
       }
 
       return bounds;
