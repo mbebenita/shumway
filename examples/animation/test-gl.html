@@ -9,6 +9,8 @@
     var Option = options.Option;
     var OptionSet = options.OptionSet;
     var coreOptions = new OptionSet("Core Options");
+    var release = false;
+    var debug = !release;
   </script>
   <script src="../../src/avm2/util.js"></script>
   <script src="../../src/swf/util.js"></script>
@@ -89,6 +91,7 @@
       defineFunctionProxy(constructor.prototype, 'lineTo');
       defineFunctionProxy(constructor.prototype, 'quadraticCurveTo');
       defineFunctionProxy(constructor.prototype, 'arc');
+      defineFunctionProxy(constructor.prototype, 'rect');
       defineFunctionProxy(constructor.prototype, 'stroke');
       defineFunctionProxy(constructor.prototype, 'scale');
       defineFunctionProxy(constructor.prototype, 'save');
@@ -159,6 +162,8 @@
           x: Math.random() * 0.2 * (canvas.width - w),
           y: 30 + Math.random() * 0.2 * (canvas.height - h - 30),
           r: 0,
+          sx: 1,
+          sy: 1,
           dx: (0.5 - Math.random()) * 1,
           dy: (0.5 - Math.random()) * 1,
           dr: Math.random() * 0.01
@@ -206,79 +211,71 @@
         }
         actor.x += actor.dx;
         actor.y += actor.dy;
-        actor.r += actor.dr;
-        // ctx.translate(actor.x, actor.y);
-        // ctx.rotate(actor.r);
-        // ctx.scale(0.5, 0.5);
-        // ctx.translate(-w / 4, -h / 4);
+        actor.r += actor.dr / 10;
+        actor.sx = 0.5;
+        actor.sy = 0.5;
+        ctx.translate(actor.x, actor.y);
+        ctx.rotate(actor.r);
+        ctx.scale(actor.sx, actor.sy);
+        ctx.translate(-w / 4, -h / 4);
         ctx.fillStyle = "orange";
 
+        ctx.beginPath();
+        ctx.moveTo(100, 100);
+        ctx.lineTo(200, 100);
+        ctx.lineTo(200, 200);
 
-//        ctx.moveTo(100, 100);
-//        ctx.lineTo(200, 100);
-//        ctx.lineTo(200, 200);
+        ctx.fillStyle = "green";
+        ctx.moveTo(300, 300);
+        ctx.lineTo(400, 300);
+        ctx.lineTo(400, 400);
+        ctx.fill();
 
-//        ctx.moveTo(300, 300);
-//        ctx.lineTo(400, 300);
-//        ctx.lineTo(400, 400);
+        ctx.beginPath();
+        ctx.fillStyle = "red";
+        ctx.moveTo(300, 300);
+        ctx.lineTo(400, 300);
+        ctx.lineTo(400, 400);
+        ctx.fill();
+
+        ctx.fillStyle = "blue";
+        ctx.beginPath();
+        ctx.rect(100, 100, 50, 50);
+        ctx.fill();
 
         ctx.beginPath();
         ctx.moveTo(0, 0);
         ctx.quadraticCurveTo(100, 400, 100, 0);
         ctx.fill();
 
-//        ctx.lineTo(200, 100);
-//        ctx.lineTo(150, 150);
-//        ctx.lineTo(200, 200);
-//        ctx.lineTo(300, 150);
-//        ctx.lineTo(100, 200);
+        ctx.beginPath();
+        ctx.fillStyle = "white";
+        ctx.translate(600, 100);
+        drawCurvyShape(ctx);
+        ctx.fill();
 
+        ctx.beginPath();
+        // ctx.transform(200, 100);
+        drawShape(ctx);
+        ctx.fill();
 
         ctx.restore();
+
+        ctx.contexts[1].flush();
       });
-
-      ctx.flush();
-
-
       // context.fillText("Actors: " + world.length, 10, 20);
-    }
-
-    var path = new GL.SimplePath();
-    // drawShape(path);
-    drawCurvyShape(path);
-//    path.moveTo(0, 0);
-//    path.quadraticCurveTo(100, 400, 200, 100);
-//    path.quadraticCurveTo(300, 500, 400, 100);
-
-    var geom = new GL.Geometry(path, true);
-
-    canvasContext.translate(300, 300);
-    canvasContext.scale(0.8, 0.8);
-
-    function renderCommands() {
-      canvasContext.fillStyle = "black";
-      canvasContext.fillRect(-1000, -10000, canvas.width * 100, canvas.height * 100);
-      canvasContext.fillStyle = "white";
-      canvasContext.beginPath();
-      // path.visit(canvasContext);
-      canvasContext.closePath();
-      canvasContext.stroke();
-
-      canvasContext.beginPath();
-      geom.visitTriangles(canvasContext);
-      canvasContext.strokeStyle = "white";
-      canvasContext.closePath();
-      canvasContext.stroke();
     }
 
     (function render() {
       fps.enter("FRAME");
       // renderWorld();
       canvasContext.strokeStyle = "red";
-      renderCommands();
-      // canvasContext.stroke();
+      renderWorld();
       fps.leave("FRAME");
-      requestAnimationFrame(render);
+      // requestAnimationFrame(render);
+      setTimeout(function () {
+        render();
+      }, 60);
     })();
   </script>
 </body>

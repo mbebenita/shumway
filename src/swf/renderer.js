@@ -776,6 +776,7 @@ function renderStage(stage, ctx, events) {
           traceRenderer.value && frameWriter.enter("> Render Visitor");
           (new RenderVisitor(stage, ctx, invalidPath, refreshStage)).start();
           traceRenderer.value && frameWriter.leave("< Render Visitor");
+          ctx.isGlContext && ctx.flush();
           timelineLeave("RENDER");
         }
 

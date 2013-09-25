@@ -1,4 +1,3 @@
-/*global notImplemented, createQuadraticCurveVertices, tessellate */
 (function (exports) {
   "use strict";
 
@@ -139,13 +138,6 @@
     buffer.prototype.subU16View = function () {
       return this.u16.subarray(0, this.offset >> 1);
     };
-    buffer.prototype.hashBytes = function (hash, offset, length) {
-      var u8 = this.u8;
-      for (var i = 0; i < length; i++) {
-        hash = (((31 * hash) | 0) + u8[i]) | 0;
-      }
-      return hash;
-    }
     buffer.prototype.hashWords = function (hash, offset, length) {
       var i32 = this.i32;
       for (var i = 0; i < length; i++) {
@@ -165,12 +157,17 @@
     var ARC                 = 0x06;
     var ELLIPSE             = 0x07;
     function path() {
-      this._buffer = new Buffer(1024 * 32);
+      this._buffer = new Buffer(1024);
       this._x = 0;
       this._y = 0;
     }
     path.prototype.hash = function () {
       return this._buffer.hashWords(0, 0, this._buffer.offset >> 2);
+    };
+    path.prototype.clone = function () {
+      var path = new Path();
+      this.visit(path);
+      return path;
     };
     path.prototype.reset = function () {
       this._x = 0;
@@ -326,7 +323,7 @@
       var indices = this._indices.subU16View();
       assert ((vertices.length % 2) === 0);
       assert ((indices.length % 3) === 0);
-      if (true) {
+      if (debug) {
         for (var i = 0; i < indices.length; i++) {
           var index = indices[i];
           assert (index >= 0 && index < vertices.length);
@@ -390,39 +387,34 @@
     };
 
     geometry.prototype.addFill = function(path, color) {
-      var polygon = [];
-      var loop;
+      if (path._buffer.offset > 10000) {
+        return;
+      }
+      var loop = null;
+      var loops = [];
       path.visit({
         moveTo: function (x, y) {
           if (loop) {
-            polygon.push(loop);
+            loops.push(loop);
           }
-          loop = [];
-          loop.push(x);
-          loop.push(y);
+          loop = [x, y];
         },
         lineTo: function (x, y) {
-          loop.push(x);
-          loop.push(y);
+          loop.push(x, y);
         },
         rect: function (x, y, w, h) {
-          var loop = [];
-          loop.push(x);
-          loop.push(y);
-          loop.push(x + w);
-          loop.push(y);
-          loop.push(x + w);
-          loop.push(y + h);
-          loop.push(x);
-          loop.push(y + h);
-          polygon.push(loop);
+          loops.push(new Float32Array([
+            x, y, x + w, y, x + w, y + h, x, y + h
+          ]));
         }
       });
-      if (!loop) {
-        loop = polygon[0];
+      if (loop) {
+        loops.push(loop);
       }
-      polygon.push(new Float32Array(loop));
-      var tessellation = tessellate(polygon);
+      if (loops.length === 0) {
+        return;
+      }
+      var tessellation = tessellate(loops);
       var t = tessellation.triangles;
       var v = tessellation.vertices;
 
@@ -449,104 +441,100 @@
       }
       this._fillBuffers();
     };
-
-    geometry.prototype.visitTriangles = function (path) {
-//      var f = this._vertices.f32;
-//      for (var i = 0; i < f.length; i += 6) {
-//        path.moveTo(f[i + 0], f[i + 1]);
-//        path.lineTo(f[i + 2], f[i + 3]);
-//        path.lineTo(f[i + 4], f[i + 5]);
-//        path.lineTo(f[i + 0], f[i + 1]);
-//      }
-    };
-    geometry.prototype.trace = function (writer) {
-      writer.writeLn(this._vertices.i32);
-    };
-    geometry.prototype.computeArea = function () {
-//      for (var i = 0; i < this._triangles; i++) {
-//      }
-    };
     return geometry;
   })();
 
-  var Command = (function () {
-    function command() {
+  var Job = (function () {
+    function job() {
 
     }
-    command.prototype.draw = function (gl) {
+    job.prototype.draw = function (gl) {
       notImplemented("draw");
     };
-    return command;
+    return job;
   })();
 
-  Command.Fill = (function () {
+  Job.Fill = (function () {
     function fill() {
 
     }
-    fill.prototype = Object.create(Command.prototype);
+    fill.prototype = Object.create(Job.prototype);
     return fill;
   })();
 
-  var t = 0;
-
-  Command.Clear = (function () {
+  Job.Clear = (function () {
     function clear(ctx) {
       this._ctx = ctx;
     }
-    clear.prototype = Object.create(Command.prototype);
+    clear.prototype = Object.create(Job.prototype);
     clear.prototype.draw = function () {
       var gl = this._ctx._gl;
       gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-      // gl.clear(gl.COLOR_BUFFER_BIT);
     };
     return clear;
   })();
 
-  Command.Draw = (function () {
-    function draw(ctx, geometry, transform, z) {
+  Job.Draw = (function () {
+    function draw(ctx, geometry, transform, z, mode) {
       this._ctx = ctx;
       this._geometry = geometry;
       this._transform = transform;
       this._z = z;
+      this._mode = mode;
+      this._initialize(ctx);
     }
-    draw.prototype = Object.create(Command.prototype);
+
+    draw.NORMAL   = 0x01;
+    draw.CLIP     = 0x02;
+    draw.STENCIL  = 0x04;
+
+    draw.prototype = Object.create(Job.prototype);
+    draw.prototype._initialize = function (ctx) {
+      if (this._program) {
+        return;
+      }
+      this._program = ctx._createProgramFromFiles("canvas.vert", "identity.frag");
+    };
     draw.prototype.draw = function () {
       var g = this._geometry;
-      var c = this._ctx;
-
       var gl = this._ctx._gl;
+      var m = this._mode;
 
-      gl.uniform1f(c._program.uniforms.uZ.location, this._z);
-
-      gl.uniformMatrix3fv(c._program.uniforms.uTransformMatrix.location, false, this._transform);
-
+      gl.useProgram(this._program);
+      gl.uniform1f(this._program.uniforms.uZ.location, this._z);
+      gl.uniformMatrix3fv(this._program.uniforms.uTransformMatrix.location, false, this._transform);
       gl.bindBuffer(gl.ARRAY_BUFFER, g._vertexBuffer);
-      var position = c._program.attributes.aPosition.location;
+      var position = this._program.attributes.aPosition.location;
       gl.enableVertexAttribArray(position);
       gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0);
-
       gl.bindBuffer(gl.ARRAY_BUFFER, g._coordinatesBuffer);
-      var coordinate = c._program.attributes.aCoordinate.location;
+      var coordinate = this._program.attributes.aCoordinate.location;
       gl.enableVertexAttribArray(coordinate);
       gl.vertexAttribPointer(coordinate, 2, gl.FLOAT, false, 0, 0);
-
       gl.bindBuffer(gl.ARRAY_BUFFER, g._colorBuffer);
-      var color = c._program.attributes.aColor.location;
+      var color = this._program.attributes.aColor.location;
       gl.enableVertexAttribArray(color);
       gl.vertexAttribPointer(color, 4, gl.FLOAT, false, 0, 0);
-
       gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, g._indexBuffer);
 
-      gl.uniformMatrix3fv(c._program.uniforms.uTransformMatrix.location, false, this._transform);
-
-//      gl.enable(gl.BLEND);
-//      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-      gl.enable(gl.DEPTH_TEST);
-      gl.depthFunc(gl.LEQUAL);
-      gl.drawElements(gl.TRIANGLES, g._triangleCount * 3, gl.UNSIGNED_SHORT, 0);
-      gl.disable(gl.DEPTH_TEST);
-      // gl.drawElements(gl.LINE_STRIP, g._triangleCount * 3, gl.UNSIGNED_SHORT, 0);
-//      gl.disable(gl.BLEND);
+      if (m === draw.CLIP) {
+        gl.enable(gl.STENCIL_TEST);
+        gl.clear(gl.STENCIL_BUFFER_BIT);
+        gl.colorMask(false, false, false, false);
+        gl.stencilFunc(gl.ALWAYS, 1, 0xFF);
+        gl.stencilOp(gl.KEEP, gl.KEEP, gl.REPLACE);
+        gl.drawElements(gl.TRIANGLES, g._triangleCount * 3, gl.UNSIGNED_SHORT, 0);
+        gl.colorMask(true, true, true, true);
+        gl.disable(gl.STENCIL_TEST);
+      } else if (m === draw.STENCIL) {
+        gl.enable(gl.STENCIL_TEST);
+        gl.stencilFunc(gl.EQUAL, 1, 0xFF);
+        gl.stencilOp(gl.KEEP,gl.KEEP,gl.KEEP);
+        gl.drawElements(gl.TRIANGLES, g._triangleCount * 3, gl.UNSIGNED_SHORT, 0);
+        gl.disable(gl.STENCIL_TEST);
+      } else {
+        gl.drawElements(gl.TRIANGLES, g._triangleCount * 3, gl.UNSIGNED_SHORT, 0);
+      }
     };
     return draw;
   })();
@@ -554,7 +542,7 @@
   exports.Path = Path;
   exports.SimplePath = SimplePath;
   exports.Geometry = Geometry;
-  exports.Command = Command;
+  exports.Job = Job;
 
   exports.makeTranslation = makeTranslation;
   exports.makeTransform = makeTransform;
@@ -654,33 +642,3 @@ function drawRandomShape(path, size) {
     }
   }
 }
-
-/*
-var path = new GL.Path();
-
-path.moveTo(0, 0);
-path.quadraticCurveTo(100, 400, 100, 0);
-
-var writer = new IndentingWriter();
-path.trace(writer);
-
-var simple = new GL.SimplePath();
-simple.moveTo(0, 0);
-simple.quadraticCurveTo(100, 400, 100, 0);
-var t = performance.now();
-for (var i = 0; i < 100; i++) {
-  simple.quadraticCurveTo(Math.random() * 100, Math.random() * 400, Math.random() * 100, Math.random() * 100);
-}
-console.info(performance.now() - t);
-
-var t = performance.now();
-var g = new GL.Geometry(simple);
-g.trace(writer);
-console.info(performance.now() - t);
-
-
-// simple.trace(writer);
-
-// var g = new GL.Geometry(simple);
-// g.trace(writer);
-*/
