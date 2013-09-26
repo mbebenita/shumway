@@ -1666,6 +1666,8 @@ function buildLinearGradientFactory(colorStops) {
   for (var i = 0; i < colorStops.length; i++) {
     defaultGradient.addColorStop(colorStops[i].ratio, colorStops[i].color);
   }
+  // HACK: For WebGL backend.
+  defaultGradient.colorStops = colorStops;
 
   var fn = function createLinearGradient(ctx, colorTransform) {
     var gradient = ctx.createLinearGradient(-1, 0, 1, 0);
@@ -1689,6 +1691,8 @@ function buildRadialGradientFactory(focalPoint, colorStops) {
   for (var i = 0; i < colorStops.length; i++) {
     defaultGradient.addColorStop(colorStops[i].ratio, colorStops[i].color);
   }
+  // HACK: For WebGL backend.
+  defaultGradient.colorStops = colorStops;
 
   var fn = function createRadialGradient(ctx, colorTransform) {
     var gradient = ctx.createRadialGradient(focalPoint, 0, 0, 0, 0, 1);
@@ -1738,6 +1742,7 @@ function initStyle(style, dictionary) {
                    (style.type === GRAPHICS_FILL_NONSMOOTHED_REPEATING_BITMAP);
       style.style = factoryCtx.createPattern(bitmap.value.props.img,
                                              repeat ? "repeat" : "no-repeat");
+      // HACK: For WebGL backend.
       style.style.image = bitmap.value.props.img;
       break;
     default:

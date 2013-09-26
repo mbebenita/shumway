@@ -28,13 +28,13 @@
     ]);
   }
 
-  function createMatrixFromTransform(transform, index) {
-    var a = transform[index + 0];
-    var b = transform[index + 1];
-    var c = transform[index + 2];
-    var d = transform[index + 3];
-    var e = transform[index + 4];
-    var f = transform[index + 5];
+  function createMatrixFromTransform(transform) {
+    var a = transform.a;
+    var b = transform.b;
+    var c = transform.c;
+    var d = transform.d;
+    var e = transform.e;
+    var f = transform.f;
     return new Float32Array([
       a, b, 0, c, d, 0, e, f, 1
     ]);
