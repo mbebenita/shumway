@@ -30,7 +30,7 @@ function DictionaryClass(domain, scope, instanceConstructor, baseClass) {
     this.primitiveMap = createEmptyObject();
   }
 
-  var c = new Class("Dictionary", ASDictionary, Domain.passthroughCallable(ASDictionary));
+  var c = new Class("Dictionary", ASDictionary, ApplicationDomain.passthroughCallable(ASDictionary));
   c.extendNative(baseClass, ASDictionary);
 
   function makePrimitiveKey(key) {
@@ -90,10 +90,17 @@ function DictionaryClass(domain, scope, instanceConstructor, baseClass) {
     return true;
   });
 
-  defineNonEnumerableProperty(prototype, "getEnumerationKeys", function () {
+  defineNonEnumerableProperty(prototype, "asGetEnumerableKeys", function () {
+    if (prototype === this) {
+      return Object.prototype.asGetEnumerableKeys.call(this);
+    }
     var primitiveMapKeys = [];
     for (var k in this.primitiveMap) {
       primitiveMapKeys.push(k);
+    }
+    if (this.weakKeys) {
+      // TODO implement workaround for flashx.textLayout.external.WeakRef
+      return primitiveMapKeys; // assuming all weak ref objects are gone
     }
     return primitiveMapKeys.concat(this.keys);
   });

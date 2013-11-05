@@ -34,7 +34,8 @@ var DEFAULT_SETTINGS = {
   logToConsole: false,
   mute: false,
   kanvas: true,
-  webgl: false
+  webgl: false,
+  turbo: true
 };
 
 function loadState() {
@@ -68,6 +69,7 @@ function updateAVM2State() {
   disableRenderVisitor.value = state.render ? false : true;
   disableMouseVisitor.value = state.mouse ? false : true;
   showQuadTree.value = state.qtree ? true : false;
+  turboMode.value = state.turbo ? true : false;
   showRedrawRegions.value = state.redraw ? true : false;
   renderAsWireframe.value = state.wireframe ? true : false;
   traceCallExecution.value = state.traceCalls ? 1 : 0;
@@ -120,10 +122,10 @@ setTimeout(function displayInfo() {
   output = "";
   for (var name in Timer.flat.timers) {
     var timer = Timer.flat.timers[name];
-    var str = timer.name + ": " + timer.total + " ms" +
+    var str = timer.name + ": " + timer.total.toFixed(2) + " ms" +
       ", count: " + timer.count +
       ", avg: " + (timer.total / timer.count).toFixed(2) + " ms" +
-      ", last: " + timer.last + " ms";
+      ", last: " + timer.last.toFixed(2) + " ms";
     output += str + "<br>";
   }
   document.getElementById("timerInfo").innerHTML = output;

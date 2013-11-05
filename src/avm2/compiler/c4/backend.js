@@ -25,27 +25,19 @@
   var VariableDeclarator = T.VariableDeclarator;
   var MemberExpression = T.MemberExpression;
   var BinaryExpression = T.BinaryExpression;
-  var SequenceExpression = T.SequenceExpression;
   var CallExpression = T.CallExpression;
   var AssignmentExpression = T.AssignmentExpression;
   var ExpressionStatement = T.ExpressionStatement;
   var ReturnStatement = T.ReturnStatement;
-  var Program = T.Program;
-  var Statement = T.Statement;
   var FunctionDeclaration = T.FunctionDeclaration;
-  var FunctionExpression = T.FunctionExpression;
   var ConditionalExpression = T.ConditionalExpression;
   var ObjectExpression = T.ObjectExpression;
   var ArrayExpression = T.ArrayExpression;
   var UnaryExpression = T.UnaryExpression;
   var NewExpression = T.NewExpression;
   var Property = T.Property;
-  var UpdateExpression = T.UpdateExpression;
-  var ForStatement = T.ForStatement;
   var BlockStatement = T.BlockStatement;
   var ThisExpression = T.ThisExpression;
-  var TypeAliasDirective = T.TypeAliasDirective;
-  var CastExpression = T.CastExpression;
   var ThrowStatement = T.ThrowStatement;
   var IfStatement = T.IfStatement;
   var WhileStatement = T.WhileStatement;
@@ -53,13 +45,9 @@
   var ContinueStatement = T.ContinueStatement;
   var SwitchStatement = T.SwitchStatement;
   var SwitchCase = T.SwitchCase;
-  var TryStatement = T.TryStatement;
-  var CatchClause = T.CatchClause;
 
   var Block = IR.Block;
   var Operator = IR.Operator;
-  var If = IR.If;
-  var Jump = IR.Jump;
   var Projection = IR.Projection;
   var Start = IR.Start;
   var Control = Looper.Control;
@@ -500,7 +488,7 @@
     var args = this.args.map(function (arg) {
       return compileValue(arg, cx);
     });
-    if (this.pristine) {
+    if (this.flags & IR.Flags.PRISTINE) {
       return call(callee, args);
     } else {
       return callCall(callee, object, args);
@@ -615,13 +603,13 @@
     var object = compileValue(this.object, cx);
     var name = compileValue(this.name, cx);
     var value = compileValue(this.value, cx);
-    return(call(id("setSlot"), [object, name, value]));
+    return(call(id("asSetSlot"), [object, name, value]));
   };
 
   IR.ASGetSlot.prototype.compile = function (cx) {
     var object = compileValue(this.object, cx);
     var name = compileValue(this.name, cx);
-    return(call(id("getSlot"), [object, name]));
+    return(call(id("asGetSlot"), [object, name]));
   };
 
   IR.Projection.prototype.compile = function (cx) {

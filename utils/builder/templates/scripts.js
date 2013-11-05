@@ -27,13 +27,12 @@
  */
 
 load($SHUMWAY_ROOT + "lib/DataView.js/DataView.js");
-load($SHUMWAY_ROOT + "lib/Kanvas/kanvas.js");
 load($SHUMWAY_ROOT + "src/avm2/options.js");
 var Option = options.Option;
 var OptionSet = options.OptionSet;
 var coreOptions = new OptionSet("Core Options");
 
-load($SHUMWAY_ROOT + "src/swf/util.js");
+load($SHUMWAY_ROOT + "src/flash/util.js");
 load($SHUMWAY_ROOT + "src/swf/swf.js");
 load($SHUMWAY_ROOT + "src/swf/inflate.js");
 load($SHUMWAY_ROOT + "src/swf/stream.js");
@@ -55,8 +54,8 @@ load($SHUMWAY_ROOT + "src/swf/parser.js");
 load($SHUMWAY_ROOT + "src/avm1/stream.js");
 load($SHUMWAY_ROOT + "src/avm1/interpreter.js");
 
-load($SHUMWAY_ROOT + "src/avm2/config.js");
-load($SHUMWAY_ROOT + "src/avm2/util.js");
+load($SHUMWAY_ROOT + "src/avm2/settings.js");
+load($SHUMWAY_ROOT + "src/avm2/avm2Util.js");
 load($SHUMWAY_ROOT + "src/avm2/metrics.js");
 
 var Counter = new metrics.Counter(true);
@@ -88,7 +87,9 @@ load($SHUMWAY_ROOT + "src/avm2/class.js");
 load($SHUMWAY_ROOT + "src/avm2/xregexp.js");
 load($SHUMWAY_ROOT + "src/avm2/runtime.js");
 load($SHUMWAY_ROOT + "src/avm2/hacks.js");
-load($SHUMWAY_ROOT + "src/avm2/vectors.js");
+load($SHUMWAY_ROOT + "src/avm2/vectors-numeric.js");
+load($SHUMWAY_ROOT + "src/avm2/vectors-generic.js");
+load($SHUMWAY_ROOT + "src/avm2/array.js");
 load($SHUMWAY_ROOT + "src/avm2/xml.js");
 load($SHUMWAY_ROOT + "src/avm2/json2.js");
 load($SHUMWAY_ROOT + "src/avm2/amf.js");
@@ -101,7 +102,6 @@ load($SHUMWAY_ROOT + "src/avm2/vm.js");
 
 load($SHUMWAY_ROOT + "src/flash/playerglobal.js");  // this needs to come before avm2utils.js
 load($SHUMWAY_ROOT + "utils/builder/templates/avm2utils.js");
-load($SHUMWAY_ROOT + "src/flash/util.js");
 
 // Manually add directories here, this doesn't get automatically updated by
 // make update-flash-refs.

@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-// Extension communication object... as it used in pdf.js
+// Extension communication object
 var FirefoxCom = (function FirefoxComClosure() {
   return {
     /**
@@ -120,6 +120,8 @@ function runViewer() {
   }
   var showURLMenu = document.getElementById('showURLMenu');
   showURLMenu.addEventListener('click', showURL);
+  var inspectorMenu = document.getElementById('inspectorMenu');
+  inspectorMenu.addEventListener('click', showInInspector);
 
   document.getElementById('copyProfileMenu').addEventListener('click', copyProfile);
 }
@@ -127,6 +129,15 @@ function runViewer() {
 function showURL() {
   var flashParams = JSON.parse(FirefoxCom.requestSync('getPluginParams', null));
   window.prompt("Copy to clipboard", flashParams.url);
+}
+
+function showInInspector() {
+  var base = "http://www.areweflashyet.com/shumway/examples/inspector/inspector.html?rfile=";
+  var params = '';
+  for (var k in movieParams) {
+    params += '&' + k + '=' + encodeURIComponent(movieParams[k]);
+  }
+  window.open(base + encodeURIComponent(movieUrl) + params);
 }
 
 function copyProfile() {
@@ -158,6 +169,12 @@ window.addEventListener("message", function handlerMessage(e) {
       break;
   }
 }, true);
+
+var TelemetryService = {
+  reportTelemetry: function (data) {
+    FirefoxCom.request('reportTelemetry', data, null);
+  }
+};
 
 var FileLoadingService = {
   get baseUrl() { return movieUrl; },
@@ -246,6 +263,8 @@ function frame(e) {
   if (initializeFrameControl) {
     // marking that movie is started
     document.body.classList.add("started");
+
+    TelemetryService.reportTelemetry({topic: "firstFrame"});
 
     // skipping frame 0
     initializeFrameControl = false;

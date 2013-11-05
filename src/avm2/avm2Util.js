@@ -18,15 +18,11 @@
 
 var inBrowser = typeof console != "undefined";
 
-if (!inBrowser) {
-  console = {
-    info: print,
-    warn: function (x) {
-      if (traceWarnings.value) {
-        print(x);
-      }
-    }
-  };
+if (!this.performance) {
+  this.performance = {};
+}
+if (!this.performance.now) {
+  this.performance.now = dateNow;
 }
 
 function backtrace() {
@@ -39,7 +35,7 @@ function backtrace() {
 
 function error(message) {
   if (!inBrowser) {
-    console.info(backtrace());
+    console.warn(backtrace());
   }
   throw new Error(message);
 }
@@ -55,12 +51,6 @@ function assert(condition) {
   }
 }
 
-function assertFalse(condition, message) {
-  if (condition) {
-    error(message);
-  }
-}
-
 function assertNotImplemented(condition, message) {
   if (!condition) {
     error("NotImplemented: " + message);
@@ -69,6 +59,10 @@ function assertNotImplemented(condition, message) {
 
 function warning(message) {
   release || console.warn(message);
+}
+
+function notUsed(message) {
+  release || assert(false, "Not Used " + message);
 }
 
 function notImplemented(message) {
@@ -241,12 +235,12 @@ function isPowerOfTwo(x) {
 }
 
 function time(fn, count) {
-  var start = new Date();
+  var start = performance.now();
   for (var i = 0; i < count; i++) {
     fn();
   }
-  var time = (new Date() - start) / count;
-  console.info("Took: " + time + "ms.");
+  var time = (performance.now() - start) / count;
+  console.info("Took: " + time.toFixed(2) + "ms.");
   return time;
 }
 
@@ -290,19 +284,34 @@ function toKeyValueArray(o) {
 }
 
 /**
- * Checks for numeric values of the form: 1, "0123", "1.4", "+13", "+0x5".
+ * Checks for key names that don't need to be prefixed.
+ * TODO: Rename this and clean up the code that deals with prefixed vs. non-prefixed key names.
  */
 function isNumeric(x) {
   if (typeof x === "number") {
+    return x === (x | 0);
+  }
+  if (typeof x !== "string" || x.length === 0) {
+    return false;
+  }
+  if (x === "0") {
     return true;
-  } else if (typeof x === "string") {
-    return !isNaN(parseInt(x, 10));
+  }
+  var c = x.charCodeAt(0);
+  if ((c >= 49) && (c <= 57)) {
+    for (var i = 1, j = x.length; i < j; i++) {
+      c = x.charCodeAt(i);
+      if (!((c >= 48) && (c <= 57))) {
+        return false;
+      }
+    }
+    return true;
   }
   return false;
 }
 
 function boxValue(value) {
-  if (isNullOrUndefined(value)) {
+  if (isNullOrUndefined(value) || isObject(value)) {
     return value;
   }
   return Object(value);
@@ -324,33 +333,8 @@ function isNumber(value) {
   return typeof value === "number";
 }
 
-function toDouble(x) {
-  return toNumber(x);
-}
-
-/**
- * Avoids a call to |Number()| if the type of |x| is already a number. We're hoping that this
- * function gets inlined.
- */
 function toNumber(x) {
-  return typeof x === "number" ? x : Number(x);
-}
-
-function toBoolean(x) {
-  return !!x;
-}
-
-function toUint(x) {
-  x = x | 0;
-  return x < 0 ? (x + 4294967296) : x;
-}
-
-function toInt(x) {
-  return x | 0;
-}
-
-function toString(x) {
-  return String(x);
+  return +x;
 }
 
 function setBitFlags(flags, flag, value) {
@@ -587,17 +571,28 @@ function utf8encode(bytes) {
       } while (validBits >= 0);
 
       if (validBits <= 0) {
-        throw "Invalid UTF8 character";
+        // Invalid UTF8 character -- copying as is
+        str += String.fromCharCode(b1);
+        continue;
       }
       var code = (b1 & ((1 << validBits) - 1));
+      var invalid = false;
       for (var i = 5; i >= validBits; --i) {
         var bi = bytes[j++];
         if ((bi & 0xC0) != 0x80) {
-          throw "Invalid UTF8 character sequence";
+          // Invalid UTF8 character sequence
+          invalid = true;
+          break;
         }
         code = (code << 6) | (bi & 0x3F);
       }
-
+      if (invalid) {
+        // Copying invalid sequence as is
+        for (var k = j - (7 - i); k < j; ++k) {
+          str += String.fromCharCode(bytes[k] & 255);
+        }
+        continue;
+      }
       if (code >= 0x10000) {
         str += String.fromCharCode((((code - 0x10000) >> 10) & 0x3FF) |
           0xD800, (code & 0x3FF) | 0xDC00);
@@ -631,6 +626,9 @@ function bitCount(i) {
 function escapeString(str) {
   if (str !== undefined) {
     str = str.replace(/[^\w$]/gi,"$"); /* No dots, colons, dashes and /s */
+    if (/^\d/.test(str)) { /* No digits at the beginning */
+      str = '$' + str;
+    }
   }
   return str;
 }
@@ -1432,26 +1430,6 @@ var Callback = (function () {
   return callback;
 })();
 
-// Dump the bytes of an ArrayBuffer.
-function dumpBytes(buffer, start, length) {
-  var s = "";
-  bytes = new Uint8Array(buffer, start, length);
-  var end = length;
-  for (var i = 0; i < end; i++) {
-    if (((i) % 16) === 0) {
-      s += "\n" + (start + i) + ": ";
-    }
-    s += bytes[i] + " ";
-  }
-  return s;
-}
-
-function addProfileMarker(marker) {
-  if (typeof FirefoxCom !== "undefined") {
-    FirefoxCom.requestSync('addProfilerMarker', marker );
-  }
-}
-
 var CircularBuffer = (function () {
   var mask = 0xFFF, size = 4096;
   function circularBuffer(Type) {
@@ -1503,4 +1481,21 @@ function hashArray(array, index, length) {
     hash = (((31 * hash) | 0) + buffer[i]) | 0;
   }
   return hash;
+}
+
+function lazyClass(holder, name, initialize) {
+  Object.defineProperty(holder, name, {
+    get: function () {
+      var start = performance.now();
+      var value = initialize();
+      print("Initialized Class: " + name + " " + (performance.now() - start).toFixed(4));
+      assert (value);
+      Object.defineProperty(holder, name, { value: value, writable: true });
+      return value;
+    }, configurable: true
+  });
+}
+
+function createNewCompartment() {
+  return newGlobal('new-compartment');
 }

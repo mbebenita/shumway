@@ -214,13 +214,13 @@ var ASNamespace;
 
 var natives = (function () {
 
-  var C = Domain.passthroughCallable;
-  var CC = Domain.constructingCallable;
+  var C = ApplicationDomain.passthroughCallable;
+  var CC = ApplicationDomain.constructingCallable;
 
   /**
    * Object.as
    */
-  function ObjectClass(runtime, scope, instanceConstructor, baseClass) {
+  function ObjectClass(applicationDomain, scope, instanceConstructor, baseClass) {
     var c = new Class("Object", Object, C(Object));
 
     c.native = {
@@ -259,6 +259,7 @@ var natives = (function () {
         }
       }
     };
+
 
     c.dynamicPrototype = c.traitsPrototype = Object.prototype;
     c.setDefaultProperties();
@@ -395,9 +396,19 @@ var natives = (function () {
         concat: Sp.concat,
         localeCompare: Sp.localeCompare,
         match: function (re) {
-          if (re === void 0) {
+          if (re === (void 0) || re === null) {
             return null;
           } else {
+            if (re instanceof RegExp && re.global) {
+              var matches = [], m;
+              while ((m = re.exec(this))) {
+                matches.push(m[0]);
+              }
+              return matches;
+            }
+            if (!(re instanceof RegExp) && !(typeof re === 'string')) {
+              re = String(re);
+            }
             return this.match(re);
           }
         },
@@ -451,106 +462,9 @@ var natives = (function () {
     return c;
   }
 
-  /**
-   * Array.as
-   */
-  function ArrayClass(runtime, scope, instanceConstructor, baseClass) {
-    var c = new Class("Array", Array, C(Array));
-    c.extendBuiltin(baseClass);
 
-    var Ap = Array.prototype;
 
-    var CACHE_NUMERIC_COMPARATORS = true;
 
-    var numericComparatorCache = createEmptyObject();
-
-    c.native = {
-      instance: {
-        length: {
-          get: function() { return this.length; },
-          set: function(l) { this.length = l; }
-        },
-        join: Ap.join,
-        pop: Ap.pop,
-        push: Ap.push,
-        reverse: Ap.reverse,
-        concat: Ap.concat,
-        shift: Ap.shift,
-        slice: Ap.slice,
-        unshift: Ap.unshift,
-        splice: Ap.splice,
-        indexOf: Ap.indexOf,
-        lastIndexOf: Ap.lastIndexOf,
-        every: Ap.every,
-        filter: Ap.filter,
-        forEach: Ap.forEach,
-        map: Ap.map,
-        some: Ap.some
-      },
-      static: {
-        /**
-         * Sorts an array of objects on one (or more) properties.
-         */
-        _sortOn: function (o, names, options) {
-          if (isString(names)) {
-            names = [names];
-          }
-          if (isNumber(options)) {
-            options = [options];
-          }
-          for (var i = names.length - 1; i >= 0; i--) {
-            var key = Multiname.getPublicQualifiedName(names[i]);
-            if (CACHE_NUMERIC_COMPARATORS && options[i] & SORT_NUMERIC) {
-              var str = "var x = toNumber(a." + key + "), y = toNumber(b." + key + ");";
-              if (options[i] & SORT_DESCENDING) {
-                str += "return x < y ? 1 : (x > y ? -1 : 0);";
-              } else {
-                str += "return x < y ? -1 : (x > y ? 1 : 0);";
-              }
-              var numericComparator = numericComparatorCache[str];
-              if (!numericComparator) {
-                numericComparator = numericComparatorCache[str] = new Function("a", "b", str);
-              }
-              o.sort(numericComparator);
-            } else {
-              o.sort(function (a, b) {
-                return asCompare(a[key], b[key], options[i] | 0);
-              });
-            }
-          }
-          return o;
-        },
-        /**
-         * Format: args: [compareFunction], [sortOptions]
-         */
-        _sort: function (o, args) {
-          if (args.length === 0) {
-            return o.sort();
-          }
-          var compareFunction, options = 0;
-          if (args[0] instanceof Function) {
-            compareFunction = args[0];
-          } else if (isNumber(args[0])) {
-            options = args[0];
-          }
-          if (isNumber(args[1])) {
-            options = args[1];
-          }
-          o.sort(function (a, b) {
-            return asCompare(a, b, options, compareFunction);
-          });
-          return o;
-        }
-      }
-    };
-    c.coerce = function (value) {
-      return value; // TODO: Fix me.
-    };
-    c.isInstanceOf = function (value) {
-      return true; // TODO: Fix me.
-    };
-    return c;
-  }
 
   /**
    * Vector.as
@@ -624,8 +538,8 @@ var natives = (function () {
     cls.native = {
       instance: {
         fixed: {
-          get: function () { return this.fixed; },
-          set: function (v) { this.fixed = v; }
+          get: function () { return this._fixed; },
+          set: function (v) { this._fixed = v; }
         },
         length: {
           get: function () { return this.length; },
@@ -636,12 +550,12 @@ var natives = (function () {
         shift: Vp.shift,
         unshift: Vp.unshift,
         _reverse: Vp.reverse,
-        _every: Vp.every,
+        // _every: Vp.every,
         _filter: Vp.filter,
-        _forEach: Vp.forEach,
+        // _forEach: Vp.forEach,
         _map: Vp.map,
-        _some: Vp.some,
-        _sort: Vp.sort,
+        // _some: Vp.some,
+        // _sort: Vp.sort,
         newThisType: function newThisType() {
           return new cls.instanceConstructor();
         },
@@ -650,12 +564,16 @@ var natives = (function () {
         }
       },
       static: {
+        _some: function (o, callback, thisObject) {
+          return o.some(callback, thisObject);
+        },
         _every: function (o, callback, thisObject) {
           return o.every(callback, thisObject);
         },
         _forEach: function (o, callback, thisObject) {
           return o.forEach(callback, thisObject);
-        }
+        },
+        _sort: arraySort
       }
     };
     cls.vectorType = type;
@@ -701,11 +619,11 @@ var natives = (function () {
   }
 
   function Int(x) {
-    return toNumber(x) | 0;
+    return x|0;
   }
 
   function boxedInt(x) {
-    return Object(Int(x));
+    return Object(x|0);
   }
 
   function intClass(runtime, scope, instanceConstructor, baseClass) {
@@ -726,11 +644,11 @@ var natives = (function () {
   }
 
   function Uint(x) {
-    return toNumber(x) >>> 0;
+    return x >>> 0;
   }
 
   function boxedUint(x) {
-    return Object(Uint(x));
+    return Object(x >>> 0);
   }
 
   function uintClass(runtime, scope, instanceConstructor, baseClass) {
@@ -921,7 +839,7 @@ var natives = (function () {
             uri = uriValue.uri;
           }
         } else {
-          uri = toString(uriValue);
+          uri = uriValue + '';
           if (uri === "") {
             prefix = "";
           } else {
@@ -934,10 +852,10 @@ var natives = (function () {
             uriValue.uri !== null) {
           uri = uriValue.uri;
         } else {
-          uri = toString(uriValue);
+          uri = uriValue + '';
         }
         if (uri === "") {
-          if (prefixValue === undefined || toString(prefixValue) === "") {
+          if (prefixValue === undefined || prefixValue + '' === "") {
             prefix = "";
           } else {
             throw "type error";
@@ -947,11 +865,10 @@ var natives = (function () {
         } else if (false && !isXMLName(prefixValue)) { // FIXME need impl
           prefix = undefined;
         } else {
-          prefix = toString(prefixValue);
+          prefix = prefixValue + '';
         }
       }
-      var ns = ShumwayNamespace.createNamespace(uri, prefix);
-      return ns;
+      return ShumwayNamespace.createNamespace(uri, prefix);
     }
 
     var c = new Class("Namespace", ASNamespace, C(ASNamespace));
@@ -975,16 +892,52 @@ var natives = (function () {
    * JSON.as
    */
   function JSONClass(runtime, scope, instanceConstructor, baseClass) {
+
+    /**
+     * Transforms a JS value into an AS value.
+     */
+    function transformJSValueToAS(value) {
+      if (typeof value !== "object") {
+        return value;
+      }
+      var keys = Object.keys(value);
+      var result = value instanceof Array ? [] : {};
+      for (var i = 0; i < keys.length; i++) {
+        result.asSetPublicProperty(keys[i], transformJSValueToAS(value[keys[i]]));
+      }
+      return result;
+    }
+
+    /**
+     * Transforms an AS value into a JS value.
+     */
+    function transformASValueToJS(value) {
+      if (typeof value !== "object") {
+        return value;
+      }
+      var keys = Object.keys(value);
+      var result = value instanceof Array ? [] : {};
+      for (var i = 0; i < keys.length; i++) {
+        var key = keys[i];
+        var jsKey = key;
+        if (!isNumeric(key)) {
+          jsKey = fromResolvedName(key);
+        }
+        result[jsKey] = transformASValueToJS(value[key]);
+      }
+      return result;
+    }
+
     function ASJSON() {}
     var c = new Class("JSON", ASJSON, C(ASJSON));
     c.extend(baseClass);
     c.native = {
       static: {
         parseCore: function parseCore(text) { // (text:String) -> Object
-          return JSON.parse(text);
+          return transformJSValueToAS(JSON.parse(text));
         },
         stringifySpecializedToString: function stringifySpecializedToString(value, replacerArray, replacerFunction, gap) { // (value:Object, replacerArray:Array, replacerFunction:Function, gap:String) -> String
-          return JSON.stringify(value, replacerFunction, gap);
+          return JSON.stringify(transformASValueToJS(value), replacerFunction, gap);
         }
       }
     };
@@ -1080,6 +1033,10 @@ var natives = (function () {
     var defaultObjectEncoding = 3;
 
     function ByteArray(bytes) {
+      if (bytes instanceof ByteArray) {
+        // HACK coercion to ByteArray (constructor is called as function from byte code)
+        return bytes;
+      }
       var initData = bytes || (this.symbol && this.symbol.data);
       if (initData) {
         this.a = new ArrayBuffer(initData.length);
@@ -1393,7 +1350,7 @@ var natives = (function () {
   }
 
   /**
-   * Domain.as
+   * ApplicationDomain.as
    */
   function DomainClass(runtime, scope, instanceConstructor, baseClass) {
     var c = new Class("File", instanceConstructor, C(instanceConstructor));
@@ -1402,7 +1359,7 @@ var natives = (function () {
       instance: {
         init: function (base) {
           this.base = base;
-          this.nativeObject = new Domain(avm2, base ? base.nativeObject : null);
+          this.nativeObject = new ApplicationDomain(avm2, base ? base.nativeObject : null);
         },
         loadBytes: function (byteArray, swfVersion) { // (byteArray:ByteArray, swfVersion:uint = 0);
           this.nativeObject.executeAbc(new AbcFile(byteArray.readRawBytes()));
@@ -1424,6 +1381,43 @@ var natives = (function () {
     return c;
   }
 
+  /**
+   * System Class
+   */
+  function SystemClass(runtime, scope, instanceConstructor, baseClass) {
+    var c = new Class("System", instanceConstructor, C(instanceConstructor));
+    c.extend(baseClass);
+    c.native = {
+      static: {
+        swfVersion: {
+          get: function () {
+            return 19;
+          }
+        },
+        apiVersion: {
+          get: function () {
+            return 26;
+          }
+        },
+        getArgv: function () {
+          return [];
+        },
+        getRunmode: function () {
+          return "mixed";
+        }
+      }
+    };
+    return c;
+  }
+
+  function bugzilla(n) {
+    switch (n) {
+      case 574600: // AS3 Vector::map Bug
+        return true;
+    }
+    return false;
+  }
+
   return {
     /**
      * Shell toplevel.
@@ -1435,6 +1429,7 @@ var natives = (function () {
     /**
      * actionscript.lang.as
      */
+    bugzilla: constant(bugzilla),
     decodeURI: constant(decodeURI),
     decodeURIComponent: constant(decodeURIComponent),
     encodeURI: constant(encodeURI),
@@ -1511,6 +1506,7 @@ var natives = (function () {
     CapabilitiesClass: CapabilitiesClass,
     FileClass: FileClass,
     DomainClass: DomainClass,
+    SystemClass: SystemClass,
 
     /**
      * DescribeType.as
@@ -1588,7 +1584,7 @@ var natives = (function () {
     }),
 
     getDefinitionByName: constant(function (name) {
-      var simpleName = name.replace("::", ".");
+      var simpleName = String(name).replace("::", ".");
       return AVM2.currentDomain().getClass(simpleName);
     }),
 

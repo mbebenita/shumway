@@ -42,8 +42,11 @@ var StageDefinition = (function () {
       this._qtree = null;
       this._invalidObjects = [];
       this._mouseMoved = false;
-      this._clickTarget = this;
+      this._mouseTarget = this;
+      this._mouseEvents = [];
       this._cursor = 'auto';
+
+      this._concatenatedTransform.invalid = false;
     },
 
     _setup: function setup(ctx, options) {
@@ -96,15 +99,26 @@ var StageDefinition = (function () {
       this._invalidObjects.push(displayObject);
     },
 
-    _processInvalidRegions: function processInvalidRegions() {
+    _processInvalidRegions: function processInvalidRegions(createInvalidPath) {
       var objects = this._invalidObjects;
       var regions = [];
 
       while (objects.length) {
         var displayObject = objects.shift();
 
+        if (displayObject._children.length) {
+          var children = displayObject._children;
+          for (var i = 0; i < children.length; i++) {
+            var child = children[i];
+            if (child._invalid === false) {
+              child._invalid = true;
+              objects.push(child);
+            }
+          }
+        }
+
         var invalidRegion = displayObject._region;
-        var currentRegion = displayObject._getRegion();
+        var currentRegion = displayObject._getRegion(this);
 
         var withinView = displayObject._stage &&
                          displayObject._visible &&
@@ -155,6 +169,10 @@ var StageDefinition = (function () {
         }
       }
 
+      if (!createInvalidPath) {
+        return;
+      }
+
       var invalidPath = new ShapePath();
 
       for (var i = 0; i < regions.length; i++) {
@@ -182,6 +200,27 @@ var StageDefinition = (function () {
       }
 
       return invalidPath;
+    },
+
+    _handleMouseButtons: function () {
+      if (this._mouseEvents.length === 0) {
+        return;
+      }
+      var eventType = this._mouseEvents.shift();
+      switch (eventType) {
+      case 'mousedown':
+        if (this._mouseTarget._buttonMode) {
+          this._mouseTarget._gotoButtonState('down');
+        }
+        this._mouseTarget._dispatchEvent('mouseDown');
+        break;
+      case 'mouseup':
+        if (this._mouseTarget._buttonMode) {
+          this._mouseTarget._gotoButtonState('over');
+        }
+        this._mouseTarget._dispatchEvent('mouseUp');
+        break;
+      }
     },
 
     _handleMouse: function handleMouse() {
@@ -267,16 +306,16 @@ var StageDefinition = (function () {
         target = target._hitTarget;
       }
 
-      if (target === this._clickTarget) {
-        target._dispatchEvent(new flash.events.MouseEvent('mouseMove'));
+      if (target === this._mouseTarget) {
+        target._dispatchEvent('mouseMove');
       } else {
-        if (this._clickTarget._buttonMode) {
-          this._clickTarget._gotoButtonState('up');
+        if (this._mouseTarget._buttonMode) {
+          this._mouseTarget._gotoButtonState('up');
         }
 
-        this._clickTarget._dispatchEvent(new flash.events.MouseEvent('mouseOut'));
+        this._mouseTarget._dispatchEvent('mouseOut');
 
-        var nodeLeft = this._clickTarget;
+        var nodeLeft = this._mouseTarget;
         var containerLeft = nodeLeft._parent;
         var nodeEntered = target;
         var containerEntered = nodeEntered._parent;
@@ -284,7 +323,7 @@ var StageDefinition = (function () {
 
         while (nodeLeft._level >= 0 && nodeLeft !== containerEntered) {
           if (nodeLeft._hasEventListener('rollOut')) {
-            nodeLeft._dispatchEvent(new flash.events.MouseEvent('rollOut', false));
+            nodeLeft._dispatchEvent('rollOut');
           }
 
           nodeLeft = nodeLeft._parent;
@@ -292,7 +331,7 @@ var StageDefinition = (function () {
 
         while (nodeEntered._level >= 0 && nodeEntered !== containerLeft) {
           if (nodeEntered._hasEventListener('rollOver')) {
-            nodeEntered._dispatchEvent(new flash.events.MouseEvent('rollOver', false));
+            nodeEntered._dispatchEvent('rollOver');
           }
 
           if (nodeEntered._buttonMode && nodeEntered._useHandCursor) {
@@ -306,9 +345,9 @@ var StageDefinition = (function () {
           target._gotoButtonState('over');
         }
 
-        target._dispatchEvent(new flash.events.MouseEvent('mouseOver'));
+        target._dispatchEvent('mouseOver');
 
-        this._clickTarget = target;
+        this._mouseTarget = target;
         this._cursor = cursor;
       }
     },
@@ -321,9 +360,6 @@ var StageDefinition = (function () {
     __glue__: {
       native: {
         instance: {
-          $canvasState: {
-            get: function () { return this._canvasState; }
-          },
           invalidate: function invalidate() { // (void) -> void
             this._invalid = true;
             this._deferRenderEvent = true;

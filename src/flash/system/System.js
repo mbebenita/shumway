@@ -15,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-/*global FirefoxCom */
+/*global FirefoxCom, TelemetryService, CLIPBOARD_FEATURE */
 
 var SystemDefinition = (function () {
   return {
@@ -27,6 +27,8 @@ var SystemDefinition = (function () {
         static: {
           setClipboard: function setClipboard(string) { // (string:String) -> void
             FirefoxCom.request('setClipboard', string);
+
+            TelemetryService.reportTelemetry({topic: 'feature', feature: CLIPBOARD_FEATURE});
           },
           pause: function pause() { // (void) -> void
             notImplemented("System.pause");
@@ -76,7 +78,8 @@ var SystemDefinition = (function () {
           },
           useCodePage: {
             get: function useCodePage() { // (void) -> Boolean
-              notImplemented("System.useCodePage");
+              somewhatImplemented("System.useCodePage");
+              return false;
             },
             set: function useCodePage(value) { // (value:Boolean) -> void
               notImplemented("System.useCodePage");
@@ -84,8 +87,25 @@ var SystemDefinition = (function () {
           },
           vmVersion: {
             get: function vmVersion() { // (void) -> String
-              notImplemented("System.vmVersion");
+              somewhatImplemented("System.vmVersion");
+              return "1.0 shumway";
             }
+          },
+          swfVersion: {
+            get: function () {
+              return 19;
+            }
+          },
+          apiVersion: {
+            get: function () {
+              return 26;
+            }
+          },
+          getArgv: function () {
+            return [];
+          },
+          getRunmode: function () {
+            return "mixed";
           }
         },
         instance: {

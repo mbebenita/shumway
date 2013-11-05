@@ -45,6 +45,9 @@ function applySegmentToStyles(segment, styles, linePaths, fillPaths, isMorph)
   var commands = segment.commands;
   var data = segment.data;
   var morphData = segment.morphData;
+  if (morphData) {
+    assert(morphData.length === data.length);
+  }
   assert(commands);
   assert(data);
   assert(isMorph === (morphData !== null));
@@ -77,6 +80,9 @@ function applySegmentToStyles(segment, styles, linePaths, fillPaths, isMorph)
     targetCommands.push(SHAPE_MOVE_TO);
     var j = data.length - 2;
     targetData.push(data[j], data[j + 1]);
+    if (isMorph) {
+      targetMorphData.push(morphData[j], morphData[j + 1]);
+    }
     for (i = commands.length; i-- > 1; j -= 2) {
       command = commands[i];
       targetCommands.push(command);
@@ -93,6 +99,9 @@ function applySegmentToStyles(segment, styles, linePaths, fillPaths, isMorph)
       }
     }
     assert(j === 0);
+    if (isMorph) {
+      assert(targetMorphData.length === targetData.length);
+    }
   }
   if (styles.line && styles.fill1)
   {
@@ -108,19 +117,21 @@ function applySegmentToStyles(segment, styles, linePaths, fillPaths, isMorph)
  * See http://blogs.msdn.com/b/mswanson/archive/2006/02/27/539749.aspx and
  * http://wahlers.com.br/claus/blog/hacking-swf-1-shapes-in-flash/ for details.
  */
-function convertRecordsToStyledPaths(records, fillPaths, linePaths,
-                                     dictionary, dependencies, recordsMorph)
+function convertRecordsToStyledPaths(records, fillPaths, linePaths, dictionary,
+                                     dependencies, recordsMorph, transferables)
 {
   var isMorph = recordsMorph !== null;
   var styles = {fill0: 0, fill1: 0, line: 0};
   var segment = null;
 
-  // fill- and lineStyles can be added by style change records in the middle of
-  // a shape records list. All records refer to those new styles with a starting
-  // offset of 1 again, so we just replace the current lists, but append all new
-  // list entries to the original list which are stored in the generated symbol.
-  var allFillPaths = fillPaths;
-  var allLinePaths = linePaths;
+  // Fill- and line styles can be added by style change records in the middle of
+  // a shape records list. This also causes the previous paths to be treated as
+  // a group, so the lines don't get moved on top of any following fills.
+  // To support this, we just append all current fill and line paths to a list
+  // when new styles are introduced.
+  var allPaths;
+  // If no style is set for a segment of a path, a 1px black line is used.
+  var defaultPath;
 
   //TODO: remove the `- 1` once we stop even parsing the EOS record
   var numRecords = records.length - 1;
@@ -131,6 +142,10 @@ function convertRecordsToStyledPaths(records, fillPaths, linePaths,
   var path;
   for (var i = 0, j = 0; i < numRecords; i++) {
     var record = records[i];
+    var morphRecord;
+    if (isMorph) {
+      morphRecord = recordsMorph[j++];
+    }
     // type 0 is a StyleChange record
     if (record.type === 0) {
       //TODO: make the `has*` fields bitflags
@@ -139,12 +154,19 @@ function convertRecordsToStyledPaths(records, fillPaths, linePaths,
       }
 
       if (record.hasNewStyles) {
+        if (!allPaths) {
+          allPaths = [];
+        }
+        push.apply(allPaths, fillPaths);
         fillPaths = createPathsList(record.fillStyles, false,
                                     dictionary, dependencies);
-        push.apply(allFillPaths, fillPaths);
+        push.apply(allPaths, linePaths);
         linePaths = createPathsList(record.lineStyles, true,
                                     dictionary, dependencies);
-        push.apply(allLinePaths, linePaths);
+        if (defaultPath) {
+          allPaths.push(defaultPath);
+          defaultPath = null;
+        }
         styles = {fill0: 0, fill1: 0, line: 0};
       }
 
@@ -168,7 +190,8 @@ function convertRecordsToStyledPaths(records, fillPaths, linePaths,
       if (record.move) {
         x = record.moveX|0;
         y = record.moveY|0;
-        // When morphed, StyleChangeRecords/MoveTo might not have a corresponding record in the start or end shape --
+        // When morphed, StyleChangeRecords/MoveTo might not have a
+        // corresponding record in the start or end shape --
         // processing morphRecord below before converting type 1 records.
       }
 
@@ -181,29 +204,56 @@ function convertRecordsToStyledPaths(records, fillPaths, linePaths,
         // "Huh," you say? Yup.
         segment.commands.push(SHAPE_MOVE_TO);
         segment.data.push(x, y);
+        if (isMorph) {
+          if (morphRecord.type === 0) {
+            morphX = morphRecord.moveX|0;
+            morphY = morphRecord.moveY|0;
+          } else {
+            morphX = x;
+            morphY = y;
+            // Not all moveTos are reflected in morph data.
+            // In that case, decrease morph data index.
+            j--;
+          }
+          segment.morphData.push(morphX, morphY);
+        }
       }
     }
     // type 1 is a StraightEdge or CurvedEdge record
     else {
       assert(record.type === 1);
-      assert(segment);
-      var morphRecord;
+      if (!segment) {
+        if (!defaultPath) {
+          var style = {color:{red:0, green: 0, blue: 0, alpha: 255}, width: 20};
+          defaultPath = new SegmentedPath(null, processStyle(style, true));
+        }
+        segment = defaultPath.addSegment([], [], isMorph ? [] : null);
+        segment.commands.push(SHAPE_MOVE_TO);
+        segment.data.push(x, y);
+        if (isMorph) {
+          segment.morphData.push(morphX, morphY);
+        }
+      }
       if (isMorph) {
-        morphRecord = recordsMorph[j++];
-        // Processing MoveTo end shape records. Notice morphRecord shall not have style changes.
-        while (morphRecord.type === 0) {
-          morphX = morphRecord.moveX|0;
-          morphY = morphRecord.moveY|0;
+        // An invalid SWF might contain a move in the EndEdges list where the
+        // StartEdges list contains an edge. The Flash Player seems to skip it,
+        // so we do, too.
+        while (morphRecord && morphRecord.type === 0) {
           morphRecord = recordsMorph[j++];
+        }
+        // The EndEdges list might be shorter than the StartEdges list. Reuse
+        // start edges as end edges in that case.
+        if (!morphRecord) {
+          morphRecord = record;
         }
       }
 
       if (record.isStraight && (!isMorph || morphRecord.isStraight)) {
         x += record.deltaX|0;
         y += record.deltaY|0;
-
         segment.commands.push(SHAPE_LINE_TO);
         segment.data.push(x, y);
+
         if (isMorph) {
           morphX += morphRecord.deltaX|0;
           morphY += morphRecord.deltaY|0;
@@ -211,32 +261,35 @@ function convertRecordsToStyledPaths(records, fillPaths, linePaths,
         }
       } else {
         var cx, cy;
+        var deltaX, deltaY;
         if (!record.isStraight) {
-          x += record.controlDeltaX|0;
-          y += record.controlDeltaY|0;
-          cx = x; cy = y;
-          x += record.anchorDeltaX|0;
-          y += record.anchorDeltaY|0;
+          cx = x + record.controlDeltaX|0;
+          cy = y + record.controlDeltaY|0;
+          x = cx + record.anchorDeltaX|0;
+          y = cy + record.anchorDeltaY|0;
         } else {
-          cx = x + (record.deltaX >> 1);
-          cy = y + (record.deltaY >> 1);
-          x += record.deltaX|0;
-          y += record.deltaY|0;
+          deltaX = record.deltaX|0;
+          deltaY = record.deltaY|0;
+          cx = x + (deltaX >> 1);
+          cy = y + (deltaY >> 1);
+          x += deltaX;
+          y += deltaY;
         }
         segment.commands.push(SHAPE_CURVE_TO);
         segment.data.push(cx, cy, x, y);
         if (isMorph) {
           if (!morphRecord.isStraight) {
-            morphX += morphRecord.controlDeltaX|0;
-            morphY += morphRecord.controlDeltaY|0;
-            cx = morphX; cy = morphY;
-            morphX += morphRecord.anchorDeltaX|0;
-            morphY += morphRecord.anchorDeltaY|0;
+            cx = morphX + morphRecord.controlDeltaX|0;
+            cy = morphY + morphRecord.controlDeltaY|0;
+            morphX = cx + morphRecord.anchorDeltaX|0;
+            morphY = cy + morphRecord.anchorDeltaY|0;
           } else {
-            cx = morphX + (morphRecord.deltaX >> 1);
-            cy = morphY + (morphRecord.deltaY >> 1);
-            morphX += morphRecord.deltaX|0;
-            morphY += morphRecord.deltaY|0;
+            deltaX = morphRecord.deltaX|0;
+            deltaY = morphRecord.deltaY|0;
+            cx = morphX + (deltaX >> 1);
+            cy = morphY + (deltaY >> 1);
+            morphX += deltaX;
+            morphY += deltaY;
           }
           segment.morphData.push(cx, cy, morphX, morphY);
         }
@@ -245,24 +298,33 @@ function convertRecordsToStyledPaths(records, fillPaths, linePaths,
   }
   applySegmentToStyles(segment, styles, linePaths, fillPaths, isMorph);
 
-  // After records processing completed, we can treat line paths just as we do
-  // fill paths. The important thing is for them to come last.
-  push.apply(allFillPaths, allLinePaths);
+  // All current paths get appended to the allPaths list at the end. First fill,
+  // then line paths.
+  if (allPaths) {
+    push.apply(allPaths, fillPaths);
+  } else {
+    allPaths = fillPaths;
+  }
+  push.apply(allPaths, linePaths);
+  if (defaultPath) {
+    allPaths.push(defaultPath);
+  }
 
   var removeCount = 0;
-  for (i = 0; i < allFillPaths.length; i++) {
-    path = allFillPaths[i];
+  for (i = 0; i < allPaths.length; i++) {
+    path = allPaths[i];
     if (!path.head()) {
       removeCount++;
       continue;
     }
-    allFillPaths[i - removeCount] = segmentedPathToShapePath(path, isMorph);
+    allPaths[i - removeCount] = segmentedPathToShapePath(path, isMorph,
+                                                         transferables);
   }
-  allFillPaths.length -= removeCount;
-  return allFillPaths;
+  allPaths.length -= removeCount;
+  return allPaths;
 }
 
-function segmentedPathToShapePath(path, isMorph) {
+function segmentedPathToShapePath(path, isMorph, transferables) {
   var start = path.head();
   var end = start;
 
@@ -332,7 +394,7 @@ function segmentedPathToShapePath(path, isMorph) {
   }
 
   var shape = new ShapePath(path.fillStyle, path.lineStyle, totalCommandsLength,
-                            totalDataLength, isMorph);
+                            totalDataLength, isMorph, transferables);
   var allCommands = shape.commands;
   var allData = shape.data;
   var allMorphData = shape.morphData;
@@ -343,7 +405,6 @@ function segmentedPathToShapePath(path, isMorph) {
 
   current = finalRoot;
   while (current) {
-    var offset = 0;
     var commands = current.commands;
     var data = current.data;
     var morphData = current.morphData;
@@ -351,11 +412,9 @@ function segmentedPathToShapePath(path, isMorph) {
     // If the segment's first moveTo goes to the current coordinates,
     // we have to skip it. Removing those in the previous loop would be too
     // costly, and we might share the arrays with another style's path.
-    if (data[0] === allData[dataIndex - 2] &&
-        data[1] === allData[dataIndex - 1])
-    {
-      offset = 1;
-    }
+    var offset = +(data[0] === allData[dataIndex - 2] &&
+                   data[1] === allData[dataIndex - 1]);
+
     for (var i = offset; i < commands.length; i++, commandsIndex++) {
       allCommands[commandsIndex] = commands[i];
     }
@@ -377,7 +436,7 @@ function processStyle(style, isLineStyle, dictionary, dependencies) {
     // TODO: Figure out how to handle startCapStyle
     style.lineCap = CAPS_STYLE_TYPES[style.endCapStyle|0];
     style.lineJoin = JOIN_STYLE_TYPES[style.joinStyle|0];
-    style.miterLimit = style.miterLimitFactor * 2;
+    style.miterLimit = (style.miterLimitFactor || 1.5) * 2;
     if (!style.color && style.hasFill) {
       var fillStyle = processStyle(style.fillStyle, false, dictionary,
                                    dependencies);
@@ -454,24 +513,46 @@ function createPathsList(styles, isLineStyle, dictionary, dependencies) {
 }
 function defineShape(tag, dictionary) {
   var dependencies = [];
+  var transferables = [];
   var fillPaths = createPathsList(tag.fillStyles, false,
                                   dictionary, dependencies);
   var linePaths = createPathsList(tag.lineStyles, true,
                                   dictionary, dependencies);
   var paths = convertRecordsToStyledPaths(tag.records, fillPaths, linePaths,
                                           dictionary, dependencies,
-                                          tag.recordsMorph || null);
+                                          tag.recordsMorph || null,
+                                          transferables);
 
+  if (tag.bboxMorph) {
+    var mbox = tag.bboxMorph;
+    extendBoundsByPoint(tag.bbox, mbox.xMin, mbox.yMin);
+    extendBoundsByPoint(tag.bbox, mbox.xMax, mbox.yMax);
+    mbox = tag.strokeBboxMorph;
+    if (mbox) {
+      extendBoundsByPoint(tag.strokeBbox, mbox.xMin, mbox.yMin);
+      extendBoundsByPoint(tag.strokeBbox, mbox.xMax, mbox.yMax);
+    }
+  }
   return {
     type: 'shape',
     id: tag.id,
-    strokeBox: tag.strokeBox,
+    strokeBbox: tag.strokeBbox,
+    strokeBboxMorph: tag.strokeBboxMorph,
     bbox: tag.bbox,
     bboxMorph: tag.bboxMorph,
     isMorph: tag.isMorph,
     paths: paths,
-    require: dependencies.length ? dependencies : null
+    require: dependencies.length ? dependencies : null,
+    transferables: transferables
   };
+}
+
+function logShape(paths, bbox) {
+  var output = '{"bounds":' + JSON.stringify(bbox) + ',"paths":[' +
+               paths.map(function(path) {
+                 return path.serialize();
+               }).join() + ']}';
+  console.log(output);
 }
 
 function SegmentedPath(fillStyle, lineStyle) {
@@ -528,17 +609,13 @@ var SHAPE_CURVE_TO       = 3;
 var SHAPE_WIDE_MOVE_TO   = 4;
 var SHAPE_WIDE_LINE_TO   = 5;
 var SHAPE_CUBIC_CURVE_TO = 6;
-// Round corners can be drawn using arcTo, but hit-testing those is a bit of a
-// pain. By creating a command with much narrower scope, we make both drawing
-// and hit-testing easy and fast.
-// Data: cornerX, cornerY, curveEndX, curveEndY, radiusX, radiusY.
-var SHAPE_ROUND_CORNER   = 7;
 // The following commands aren't available in the Flash Player. We use them as
 // shortcuts for complex operations that exist natively on Canvas.
-var SHAPE_CIRCLE         = 8;
-var SHAPE_ELLIPSE        = 9;
+var SHAPE_CIRCLE         = 7;
+var SHAPE_ELLIPSE        = 8;
 
-function ShapePath(fillStyle, lineStyle, commandsCount, dataLength, isMorph)
+function ShapePath(fillStyle, lineStyle, commandsCount, dataLength, isMorph,
+                   transferables)
 {
   this.fillStyle = fillStyle;
   this.lineStyle = lineStyle;
@@ -557,8 +634,24 @@ function ShapePath(fillStyle, lineStyle, commandsCount, dataLength, isMorph)
   this.bounds = null;
   this.strokeBounds = null;
 
-  this.isMorph = isMorph;
+  this.isMorph = !!isMorph;
   this.fullyInitialized = false;
+  // SpiderMonkey bug 841904 causes typed arrays to lose their buffers during
+  // worker#postMessage under some conditions. To work around this while still
+  // being able to move buffers instead of copying them, we have to store the
+  // buffers themselves, too, and restore the typed arrays after postMessage.
+  if (inWorker) {
+    assert(transferables);
+    this.buffers = [this.commands.buffer, this.data.buffer];
+    transferables.push(this.commands.buffer, this.data.buffer);
+    if (isMorph) {
+      this.buffers.push(this.morphData.buffer);
+      transferables.push(this.morphData.buffer);
+    }
+  }
+  else {
+    this.buffers = null;
+  }
 }
 
 ShapePath.prototype = {
@@ -597,12 +690,6 @@ ShapePath.prototype = {
     this.commands.push(SHAPE_CIRCLE);
     this.data.push(x, y, radius);
   },
-  drawRoundCorner: function(cornerX, cornerY, curveEndX, curveEndY,
-                            radiusX, radiusY)
-  {
-    this.commands.push(SHAPE_ROUND_CORNER);
-    this.data.push(cornerX, cornerY, curveEndX, curveEndY, radiusX, radiusY);
-  },
   ellipse: function(x, y, radiusX, radiusY) {
     this.commands.push(SHAPE_ELLIPSE);
     this.data.push(x, y, radiusX, radiusY);
@@ -618,8 +705,8 @@ ShapePath.prototype = {
     var formOpen = false;
     var formOpenX = 0;
     var formOpenY = 0;
-    for (var j = 0, k = 0; j < commands.length; j++) {
-      if (!this.isMorph) {
+    if (!this.isMorph) {
+      for (var j = 0, k = 0; j < commands.length; j++) {
         switch (commands[j]) {
           case SHAPE_MOVE_TO:
             formOpen = true;
@@ -646,10 +733,6 @@ ShapePath.prototype = {
             ctx.bezierCurveTo(data[k++]/20, data[k++]/20,
                               data[k++]/20, data[k++]/20,
                               data[k++]/20, data[k++]/20);
-            break;
-          case SHAPE_ROUND_CORNER:
-            ctx.arcTo(data[k++]/20, data[k++]/20, data[k++]/20, data[k++]/20,
-                      data[k++]/20, data[k++]/20);
             break;
           case SHAPE_CIRCLE:
             if (formOpen) {
@@ -692,10 +775,16 @@ ShapePath.prototype = {
             }
             break;
           default:
+            // Sometimes, the very last command isn't properly set. Ignore it.
+            if (commands[j] === 0 && j === commands.length -1) {
+              break;
+            }
             console.warn("Unknown drawing command encountered: " +
                          commands[j]);
         }
-      } else {
+      }
+    } else {
+      for (var j = 0, k = 0; j < commands.length; j++) {
         switch (commands[j]) {
           case SHAPE_MOVE_TO:
             ctx.moveTo(morph(data[k]/20, morphData[k++]/20, ratio),
@@ -725,6 +814,8 @@ ShapePath.prototype = {
       var fillStyle = this.fillStyle;
       if (fillStyle) {
         colorTransform.setFillStyle(ctx, fillStyle.style);
+        ctx.imageSmoothingEnabled = ctx.mozImageSmoothingEnabled =
+                                    fillStyle.smooth;
         var m = fillStyle.transform;
         ctx.save();
         colorTransform.setAlpha(ctx);
@@ -887,43 +978,6 @@ ShapePath.prototype = {
             if (roots[i] >= x) {
               inside = !inside;
             }
-          }
-          break;
-        case SHAPE_ROUND_CORNER:
-          cpX = data[dataIndex++];
-          cpY = data[dataIndex++];
-          toX = data[dataIndex++];
-          toY = data[dataIndex++];
-          rX = data[dataIndex++];
-          rY = data[dataIndex++];
-          // The round corner being fully to the left, top or bottom of x,y
-          // means it's irrelevant.
-          if ((toY > y) === (fromY > y) || fromX < x && toX < x) {
-            break;
-          }
-          // The round corner crossing y and being fully to the right means
-          // it crosses the ray.
-          if (fromX >= x && toX >= x) {
-            inside = !inside;
-            break;
-          }
-          // we want the ellipse's center
-          if ((toX > fromX) === (toY > fromY)) {
-            cp2X = fromX;
-            cp2Y = toY;
-          } else {
-            cp2X = toX;
-            cp2Y = fromY;
-          }
-          localX = x - cp2X;
-          localY = y - cp2Y;
-          // We already established that x,y lies somewhere in the ellipse's
-          // right quadrant. Hence, a simple "is in the ellipse XOR has negative
-          // localX" test suffices.
-          if (localX * localX / (rX * rX) + localY * localY / (rY * rY) <= 1 !==
-              localX <= 0)
-          {
-              inside = !inside;
           }
           break;
         case SHAPE_CIRCLE:
@@ -1134,40 +1188,6 @@ ShapePath.prototype = {
             }
           }
           break;
-        case SHAPE_ROUND_CORNER:
-          cpX = data[dataIndex++];
-          cpY = data[dataIndex++];
-          toX = data[dataIndex++];
-          toY = data[dataIndex++];
-          rX = data[dataIndex++];
-          rY = data[dataIndex++];
-          // Eliminate based on bounds
-          if (maxX < fromX && maxX < toX || minX > fromX && minX > toX ||
-              maxY < fromY && maxY < toY || minY > fromY && minY > toY)
-          {
-            break;
-          }
-          // we want the ellipse's center
-          if ((toX > fromX) === (toY > fromY)) {
-            cp2X = fromX;
-            cp2Y = toY;
-          } else {
-            cp2X = toX;
-            cp2Y = fromY;
-          }
-          localX = Math.abs(x - cp2X);
-          localY = Math.abs(y - cp2Y);
-          localX -= halfWidth;
-          localY -= halfWidth;
-          if (localX * localX / (rX * rX) + localY * localY / (rY * rY) > 1) {
-            break;
-          }
-          localX += width;
-          localY += width;
-          if (localX * localX / (rX * rX) + localY * localY / (rY * rY) > 1) {
-            return true;
-          }
-          break;
         case SHAPE_CIRCLE:
           cpX = data[dataIndex++];
           cpY = data[dataIndex++];
@@ -1233,7 +1253,7 @@ ShapePath.prototype = {
     var data = this.data;
     var length = commands.length;
     var bounds;
-    if (commands[0] === SHAPE_MOVE_TO || commands[0] > SHAPE_ROUND_CORNER) {
+    if (commands[0] === SHAPE_MOVE_TO || commands[0] > SHAPE_CUBIC_CURVE_TO) {
       bounds = {xMin: data[0], yMin: data[1]};
     } else {
       // only the various single-line-drawing commands start out at zero
@@ -1307,11 +1327,6 @@ ShapePath.prototype = {
             }
           }
           break;
-        case SHAPE_ROUND_CORNER:
-          // Relying on the fact that round corners never lie outside their
-          // rectangle, we ignore them.
-          dataIndex += 6;
-          break;
         case SHAPE_CIRCLE:
           toX = data[dataIndex++];
           toY = data[dataIndex++];
@@ -1352,7 +1367,31 @@ ShapePath.prototype = {
       this.strokeBounds = bounds;
     }
     return bounds;
+  },
+  serialize: function() {
+    var output = '{';
+    if (this.fillStyle) {
+      output += '"fill":' + JSON.stringify(this.fillStyle) + ',';
+    }
+    if (this.lineStyle) {
+      output += '"stroke":' + JSON.stringify(this.lineStyle) + ',';
+    }
+
+    output += '"commands":[' + Array.apply([], this.commands).join() + '],';
+    output += '"data":[' + Array.apply([], this.data).join() + ']';
+
+    return output + '}';
   }
+};
+
+ShapePath.fromPlainObject = function(obj) {
+  var path = new ShapePath(obj.fill || null, obj.stroke || null);
+  path.commands = new Uint8Array(obj.commands);
+  path.data = new Int32Array(obj.data);
+  if (!inWorker) {
+    finishShapePath(path);
+  }
+  return path;
 };
 
 function distanceSq(x1, y1, x2, y2) {
@@ -1625,36 +1664,38 @@ function morph(start, end, ratio) {
 
 /**
  * For shapes parsed in a worker thread, we have to finish their
- * initialization after receiving the data in the main thread.
+ * paths after receiving the data in the main thread.
  *
  * This entails creating proper instances for all the contained data types.
  */
-function finishShapePaths(paths, dictionary) {
-  assert(window);
+function finishShapePath(path, dictionary) {
+  assert(!inWorker);
 
-  for (var i = 0; i < paths.length; i++) {
-    var path = paths[i];
-    if (path.fullyInitialized) {
-      continue;
-    }
-    if (!(path instanceof ShapePath)) {
-      var untypedPath = path;
-      path = paths[i] = new ShapePath(path.fillStyle, path.lineStyle, 0, 0,
-                                      path.isMorph);
-      path.commands = untypedPath.commands;
-      path.data = untypedPath.data;
-      path.morphData = untypedPath.morphData;
-    }
-    path.fillStyle && initStyle(path.fillStyle, dictionary);
-    path.lineStyle && initStyle(path.lineStyle, dictionary);
-    path.fullyInitialized = true;
+  if (path.fullyInitialized) {
+    return path;
   }
+  if (!(path instanceof ShapePath)) {
+    var untypedPath = path;
+    path = new ShapePath(path.fillStyle, path.lineStyle, 0, 0, path.isMorph);
+    // See the comment in the ShapePath ctor for why we're recreating the
+    // typed arrays here.
+    path.commands = new Uint8Array(untypedPath.buffers[0]);
+    path.data = new Int32Array(untypedPath.buffers[1]);
+    if (untypedPath.isMorph) {
+      path.morphData = new Int32Array(untypedPath.buffers[2]);
+    }
+    path.buffers = null;
+  }
+  path.fillStyle && initStyle(path.fillStyle, dictionary);
+  path.lineStyle && initStyle(path.lineStyle, dictionary);
+  path.fullyInitialized = true;
+  return path;
 }
 
 var inWorker = (typeof window) === 'undefined';
 // Used for creating gradients and patterns
 var factoryCtx = !inWorker ?
-                 document.createElement('canvas').getContext('kanvas-2d') :
+                 document.createElement('canvas').getContext('2d') :
                  null;
 
 /**
@@ -1676,7 +1717,7 @@ function buildLinearGradientFactory(colorStops) {
     }
     return gradient;
   };
-  fn.defaultGradient = defaultGradient;
+  fn.defaultFillStyle = defaultGradient;
 
   return fn;
 }
@@ -1701,7 +1742,38 @@ function buildRadialGradientFactory(focalPoint, colorStops) {
     }
     return gradient;
   };
-  fn.defaultGradient = defaultGradient;
+  fn.defaultFillStyle = defaultGradient;
+
+  return fn;
+}
+
+/**
+ * @param {Object} img
+ * @param {String} repeat
+ */
+function buildBitmapPatternFactory(img, repeat) {
+  var defaultPattern = factoryCtx.createPattern(img, repeat);
+
+  var cachedTransform, cachedTransformKey;
+  var fn = function createBitmapPattern(ctx, colorTransform) {
+    if (!colorTransform.mode) {
+      return defaultPattern;
+    }
+    var key = colorTransform.getTransformFingerprint();
+    if (key === cachedTransformKey) {
+      return cachedTransform;
+    }
+    var canvas = document.createElement('canvas');
+    canvas.width = img.width;
+    canvas.height = img.height;
+    var ctx = canvas.getContext('2d');
+    colorTransform.setAlpha(ctx, true);
+    ctx.drawImage(img, 0, 0);
+    cachedTransform = ctx.createPattern(canvas, repeat);
+    cachedTransformKey = key;
+    return cachedTransform;
+  };
+  fn.defaultFillStyle = defaultPattern;
 
   return fn;
 }
@@ -1740,8 +1812,9 @@ function initStyle(style, dictionary) {
       var bitmap = dictionary[style.bitmapId];
       var repeat = (style.type === GRAPHICS_FILL_REPEATING_BITMAP) ||
                    (style.type === GRAPHICS_FILL_NONSMOOTHED_REPEATING_BITMAP);
-      style.style = factoryCtx.createPattern(bitmap.value.props.img,
-                                             repeat ? "repeat" : "no-repeat");
+
+      style.style = buildBitmapPatternFactory(bitmap.value.props.img,
+                                              repeat ? "repeat" : "no-repeat");
       // HACK: For WebGL backend.
       style.style.image = bitmap.value.props.img;
       break;

@@ -74,6 +74,24 @@ var CapabilitiesDefinition = (function () {
             return window.screen.height;
           }
         },
+        manufacturer: {
+          get: function manufacturer() {
+            somewhatImplemented("Capabilities.manufacturer");
+            return "Mozilla Research";
+          }
+        },
+        language: {
+          get: function language() {
+            somewhatImplemented("Capabilities.language");
+            return "en";
+          }
+        },
+        playerType: {
+          get: function playerType() {
+            somewhatImplemented("Capabilities.playerType");
+            return "PlugIn";
+          }
+        }
       }
     },
     script: {

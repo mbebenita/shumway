@@ -130,7 +130,6 @@ var isXMLType, isXMLName, XMLParser;
           if (n.children.length) {
             s += ">";
             for (var i = 0; i < n.children.length; i++) {
-              s += "\n";
               s += visit(n.children[i], this);
             }
             s += "</" + prefix + n.name.mn.name + ">";
@@ -732,7 +731,7 @@ var isXMLType, isXMLName, XMLParser;
       this.init(kind, uri, name, prefix);
     }
 
-    var c = new Class("XML", ASXML, Domain.passthroughCallable(ASXML));
+    var c = new Class("XML", ASXML, ApplicationDomain.passthroughCallable(ASXML));
     c.flags = FLAG_IGNORE_COMMENTS |
       FLAG_IGNORE_PROCESSING_INSTRUCTIONS |
       FLAG_IGNORE_WHITESPACE |
@@ -802,7 +801,10 @@ var isXMLType, isXMLName, XMLParser;
       return result;
     }
 
-    Xp.getEnumerationKeys = function getEnumerationKeys() {
+    Xp.asGetEnumerableKeys = function asGetEnumerableKeys() {
+      if (Xp === this) {
+        return Object.prototype.asGetEnumerableKeys.call(this);
+      }
       var keys = [];
       this.children.forEach(function (v, i) {
         keys.push(v.name);
@@ -983,12 +985,18 @@ var isXMLType, isXMLName, XMLParser;
           });
         }
       } else {
-        return this.children.some(function (v, i) {
+        if (this.children.some(function (v, i) {
           if ((anyName || v.kind === "element" && v.name.localName === name.localName) &&
               ((anyNamespace || v.kind === "element" && v.name.uri === name.uri))) {
             return true;
           }
-        });
+        })) {
+          return true;
+        }
+        // HACK if child with specific name is not present, check object's attributes.
+        // The presence of the attribute/method can be checked during with(), see #850.
+        var resolved = Multiname.isQName(mn) ? mn : resolveMultiname(this, mn);
+        return !!this[Multiname.getQualifiedName(resolved)];
       }
     };
 
@@ -1251,7 +1259,8 @@ var isXMLType, isXMLName, XMLParser;
           return toString(this);
         },
         hasOwnProperty: function hasOwnProperty(P) { // (P) -> Boolean
-          notImplemented("XML.hasOwnProperty");
+          somewhatImplemented("XML.hasOwnProperty");
+          return this.hasProperty(P);
         },
         propertyIsEnumerable: function propertyIsEnumerable(P) { // (P) -> Boolean
           notImplemented("XML.propertyIsEnumerable");
@@ -1463,7 +1472,7 @@ var isXMLType, isXMLName, XMLParser;
       this.children = [];
     }
 
-    var c = new Class("XMLList", ASXMLList, Domain.passthroughCallable(ASXMLList));
+    var c = new Class("XMLList", ASXMLList, ApplicationDomain.passthroughCallable(ASXMLList));
     c.extend(baseClass);
 
     var XLp = XMLList.prototype = ASXMLList.prototype;
@@ -1762,7 +1771,10 @@ var isXMLType, isXMLName, XMLParser;
       return target;
     }
 
-    XLp.getEnumerationKeys = function getEnumerationKeys() {
+    XLp.asGetEnumerableKeys = function asGetEnumerableKeys() {
+      if (XLp === this) {
+        return Object.prototype.asGetEnumerableKeys.call(this);
+      }
       var keys = [];
       this.children.forEach(function (v, i) {
         keys.push(i);
@@ -1788,7 +1800,8 @@ var isXMLType, isXMLName, XMLParser;
           return toString(this); //.bind(null, this);
         },
         hasOwnProperty: function hasOwnProperty(P) { // (P) -> Boolean
-          notImplemented("XMLList.hasOwnProperty");
+          somewhatImplemented("XMLList.hasOwnProperty");
+          return this.hasProperty(P);
         },
         propertyIsEnumerable: function propertyIsEnumerable(P) { // (P) -> Boolean
           notImplemented("XMLList.propertyIsEnumerable");
@@ -2006,7 +2019,7 @@ var isXMLType, isXMLName, XMLParser;
       this.isAttr = mn.isAttribute();
     }
 
-    var c = new Class("QName", QName, Domain.passthroughCallable(QName));
+    var c = new Class("QName", QName, ApplicationDomain.passthroughCallable(QName));
     c.extend(baseClass);
     QNp = QName.prototype;
     defineNonEnumerableGetter(QNp, "localName", function () {

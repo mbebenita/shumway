@@ -15,10 +15,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+/*global TelemetryService, VIDEO_FEATURE */
 
 var VideoDefinition = (function () {
   var def = {
     initialize: function initialize() {
+      TelemetryService.reportTelemetry({topic: 'feature', feature: VIDEO_FEATURE});
     },
     attachNetStream: function (netStream) {
       this._netStream = netStream;
@@ -66,7 +68,7 @@ var VideoDefinition = (function () {
         ctx.restore();
       }
 
-      var matrix = ctx.currentTransform;
+      var matrix = this._getConcatenatedTransform(true);
       var sx = width / this._videoWidth;
       var sy = height / this._videoHeight;
 
@@ -75,8 +77,8 @@ var VideoDefinition = (function () {
       var b = sx * matrix.b / scaleFactor;
       var c = sy * matrix.c / scaleFactor;
       var d = sy * matrix.d / scaleFactor;
-      var e = matrix.e / scaleFactor;
-      var f = matrix.f / scaleFactor;
+      var e = matrix.tx / 20 / scaleFactor;
+      var f = matrix.ty / 20 / scaleFactor;
 
       var cssTransform = "transform: matrix(" + a + "," + b + "," + c + "," +
          d + "," + e + "," + f + ");";

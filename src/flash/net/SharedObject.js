@@ -15,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-/*global createEmptyObject, Multiname */
+/*global createEmptyObject, Multiname, TelemetryService, SHAREDOBJECT_FEATURE */
 
 var SharedObjectDefinition = (function () {
 
@@ -55,6 +55,8 @@ var SharedObjectDefinition = (function () {
       this._objectEncoding = _defaultObjectEncoding;
       this._data[Multiname.getPublicQualifiedName("levelCompleted")] = 32;
       this._data[Multiname.getPublicQualifiedName("completeLevels")] = 32;
+
+      TelemetryService.reportTelemetry({topic: 'feature', feature: SHAREDOBJECT_FEATURE});
     },
     __glue__: {
       native: {
@@ -83,7 +85,7 @@ var SharedObjectDefinition = (function () {
         },
         instance: {
           setDirty: function setDirty(propertyName) { // (propertyName:String) -> void
-            notImplemented("SharedObject.setDirty");
+            somewhatImplemented("SharedObject.setDirty");
           },
           invoke: function invoke(index) { // (index:uint) -> any
             return invokeWithArgsArray.call(this, index,

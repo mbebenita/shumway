@@ -31,7 +31,7 @@
     }
     timer.flat = flat;
     function getTicks() {
-      return new Date().getTime();
+      return performance.now();
     }
     timer.prototype.start = function() {
       this.begin = getTicks();
@@ -47,10 +47,10 @@
       timer.stop();
     };
     timer.start = function (name) {
-      top = name in top.timers ? top.timers[name] : top.timers[name] = new timer(top, name);
+      top = top.timers[name] || (top.timers[name] = new timer(top, name));
       top.start();
 
-      var tmp = name in flat.timers ? flat.timers[name] : flat.timers[name] = new timer(flat, name);
+      var tmp = flat.timers[name] || (flat.timers[name] = new timer(flat, name));
       tmp.start();
       flatStack.push(tmp);
     };
@@ -72,7 +72,7 @@
         writer.writeLn("SHUMWAY$JSON " + JSON.stringify({timer: this}));
         return;
       }
-      writer.enter(this.name + ": " + this.total + " ms" +
+      writer.enter(this.name + ": " + this.total.toFixed(2) + " ms" +
                    ", count: " + this.count +
                    ", average: " + (this.total / this.count).toFixed(2) + " ms");
       for (var name in this.timers) {

@@ -323,7 +323,7 @@
       var indices = this._indices.subU16View();
       assert ((vertices.length % 2) === 0);
       assert ((indices.length % 3) === 0);
-      if (debug) {
+      if (!release) {
         for (var i = 0; i < indices.length; i++) {
           var index = indices[i];
           assert (index >= 0 && index < vertices.length);

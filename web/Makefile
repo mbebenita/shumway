@@ -22,7 +22,7 @@ EXTENSION_DIR=../build/firefox
 build: ensureoutputdir \
        $(SHUMWAY_ROOT)/src/flash/playerglobal.abc
 
-	cp -R $(SHUMWAY_ROOT)/LICENSE index.html images $(BUILD_DIR)/
+	cp -R $(SHUMWAY_ROOT)/LICENSE index.html main.css main.swf images $(BUILD_DIR)/
 	# Coping JavaScript content files
 	mkdir $(BUILD_DIR)/src
 	mkdir $(BUILD_DIR)/src/swf
@@ -70,11 +70,11 @@ build: ensureoutputdir \
 	cp $(SHUMWAY_ROOT)/src/avm2/compiler/lljs/src/*.js $(BUILD_DIR)/src/avm2/compiler/lljs/src/
 	mkdir -p $(BUILD_DIR)/src/avm2/generated/builtin
 	cp $(SHUMWAY_ROOT)/src/avm2/generated/builtin/builtin.abc $(BUILD_DIR)/src/avm2/generated/builtin/
+	mkdir -p $(BUILD_DIR)/src/avm2/generated/shell
+	cp $(SHUMWAY_ROOT)/src/avm2/generated/shell/shell.abc $(BUILD_DIR)/src/avm2/generated/shell/
 	mkdir -p $(BUILD_DIR)/src/avm2/generated/avm1lib
 	cp $(SHUMWAY_ROOT)/src/avm2/generated/avm1lib/avm1lib.abc $(BUILD_DIR)/src/avm2/generated/avm1lib/
 	mkdir $(BUILD_DIR)/lib
-	mkdir $(BUILD_DIR)/lib/Kanvas
-	cp $(SHUMWAY_ROOT)/lib/Kanvas/* $(BUILD_DIR)/lib/Kanvas/
 	mkdir $(BUILD_DIR)/lib/DataView.js
 	cp $(SHUMWAY_ROOT)/lib/DataView.js/* $(BUILD_DIR)/lib/DataView.js/
 	mkdir $(BUILD_DIR)/lib/mp3

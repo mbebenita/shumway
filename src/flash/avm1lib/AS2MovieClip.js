@@ -30,15 +30,19 @@ var AS2MovieClipDefinition = (function () {
       return this.$nativeObject._duplicate(name, depth, initObject);
     },
     _constructSymbol: function constructSymbol(symbolId, name) {
-      var theClass = AS2Context.instance.classes && AS2Context.instance.classes[name];
-      if (!theClass) {
-        return;
-      }
+      var theClass = AS2Context.instance.classes && AS2Context.instance.classes[symbolId];
+      var symbolProps = AS2Context.instance.assets[symbolId];
 
-      var mc = new flash.display.MovieClip();
+      var symbolClass = flash.display.MovieClip.class;
+      var mc = symbolClass.createAsSymbol(symbolProps);
       mc._avm1SymbolClass = theClass;
+      symbolClass.instanceConstructor.call(mc);
       this.$nativeObject.addChild(mc);
+
       return mc;
+    },
+    _gotoLabel: function (label) {
+      this.$nativeObject.gotoLabel(label);
     },
     _callFrame: function callFrame(frame) {
       this.$nativeObject._callFrame(frame);
@@ -58,16 +62,17 @@ var AS2MovieClipDefinition = (function () {
   def.__glue__ = {
     native: {
       instance: {
-        $nativeObject: {
+        _as3Object: {
           get: function () {
             return this.$nativeObject;
           }
         },
-        init: def.init,
+        _init: def.init,
         _insertChildAtDepth: def._insertChildAtDepth,
         _duplicate: def._duplicate,
         _constructSymbol: def._constructSymbol,
         _callFrame: def._callFrame,
+        _gotoLabel: def._gotoLabel,
       }
     },
     script: {

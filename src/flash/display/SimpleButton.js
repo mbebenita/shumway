@@ -38,6 +38,7 @@ var SimpleButtonDefinition = (function () {
       this._prevAvm1StateCode = 0;
       this._avm1StateCode = 0;
       this._avm1MouseEvents = null;
+      this._isContainer = true;
 
       var s = this.symbol;
       if (s) {
@@ -87,19 +88,33 @@ var SimpleButtonDefinition = (function () {
         case 'down': state = this._downState; break;
       }
 
-      if (this._children[0]) {
-        if (this._children[0] === state) {
+      if (!state) {
+        // XXX: no state found for the button, are we doing the right thing here?
+        return;
+      }
+
+      var currentChild = this._children[0];
+      if (currentChild) {
+        if (currentChild === state) {
           return;
         }
 
         if (this._stage) {
-          this._stage._removeFromStage(this._children[0]);
+          this._stage._removeFromStage(currentChild);
         }
+
+        currentChild._invalidateTransform();
+      }
+
+      if (!state) {
+        this._children.shift();
+        return;
       }
 
       this._children[0] = state;
 
       state._parent = this;
+      state._invalidateTransform();
 
       if (this._stage) {
         this._stage._addToStage(state);
@@ -115,13 +130,13 @@ var SimpleButtonDefinition = (function () {
       }
     },
 
-    _getRegion: function getRegion() {
+    _getRegion: function getRegion(targetCoordSpace) {
       if (!this._hitTestState) {
         return { xMin: 0, yMin: 0, xMax: 0, yMax: 0 };
       }
 
       var b = this._hitTestState.getBounds(null);
-      return this._getTransformedRect(b, null);
+      return this._getTransformedRect(b, targetCoordSpace);
     },
 
     _getAS2Object: function () {

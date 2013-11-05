@@ -38,18 +38,11 @@ var jsGlobal = (function() { return this || (1, eval)('this'); })();
 
 var VM_SLOTS = "vm slots";
 var VM_LENGTH = "vm length";
-var VM_TRAITS = "vm traits";
 var VM_BINDINGS = "vm bindings";
 var VM_NATIVE_PROTOTYPE_FLAG = "vm native prototype";
-var VM_ENUMERATION_KEYS = "vm enumeration keys";
-var VM_TOMBSTONE = createEmptyObject();
 var VM_OPEN_METHODS = "vm open methods";
-var VM_NEXT_NAME = "vm next name";
-var VM_NEXT_NAME_INDEX = "vm next name index";
 var VM_IS_CLASS = "vm is class";
 var VM_OPEN_METHOD_PREFIX = "open_";
-
-var VM_NATIVE_BUILTINS = [Object, Number, Boolean, String, Array, Date, RegExp];
 
 var VM_NATIVE_BUILTIN_SURROGATES = [
   { object: Object, methods: ["toString", "valueOf"] },
@@ -211,7 +204,7 @@ var LazyInitializer = (function () {
     } else if (this.target instanceof ClassInfo) {
       this.name = Multiname.getQualifiedName(target.instanceInfo.name);
       initialize = function () {
-        return target.abc.domain.getProperty(target.instanceInfo.name);
+        return target.abc.applicationDomain.getProperty(target.instanceInfo.name);
       };
     } else {
       notImplemented(target);
@@ -235,7 +228,7 @@ var LazyInitializer = (function () {
  * Property Accessors:
  *
  * Every AS3 object has the following "virtual" accessors methods:
- * - asGetProperty(namespaces, name, flags, isMethod)
+ * - asGetProperty(namespaces, name, flags)
  * - asSetProperty(namespaces, name, flags, value)
  * - asHasProperty(namespaces, name, flags)
  * - asCallProperty(namespaces, name, flags, isLex, args)
@@ -252,6 +245,7 @@ var LazyInitializer = (function () {
  * - asNextName(index)
  * - asNextNameIndex(index)
  * - asNextValue(index)
+ * - asGetEnumerableKeys()
  *
  * Multiname resolution methods:
  * - getNamespaceResolutionMap(namespaces)
@@ -324,12 +318,19 @@ function asGetPublicProperty(name) {
   return this.asGetProperty(undefined, name, 0);
 }
 
-function asGetProperty(namespaces, name, flags, isMethod) {
+function asGetProperty(namespaces, name, flags) {
   var resolved = this.resolveMultinameProperty(namespaces, name, flags);
   if (this.asGetNumericProperty && Multiname.isNumeric(resolved)) {
     return this.asGetNumericProperty(resolved);
   }
   return this[resolved];
+}
+
+function asGetPropertyLikelyNumeric(namespaces, name, flags) {
+  if (typeof name === "number") {
+    return this.asGetNumericProperty(name);
+  }
+  return asGetProperty.call(this, namespaces, name, flags);
 }
 
 /**
@@ -377,6 +378,14 @@ function asSetProperty(namespaces, name, flags, value) {
     return this.asSetNumericProperty(resolved, value);
   }
   this[resolved] = value;
+}
+
+function asSetPropertyLikelyNumeric(namespaces, name, flags, value) {
+  if (typeof name === "number") {
+    this.asSetNumericProperty(name, value);
+    return;
+  }
+  return asSetProperty.call(this, namespaces, name, flags, value);
 }
 
 function asDefinePublicProperty(name, descriptor) {
@@ -466,24 +475,7 @@ function asHasProperty(namespaces, name, flags, nonProxy) {
 }
 
 function asDeleteProperty(namespaces, name, flags) {
-  if (this.deleteProperty) {
-    return this.deleteProperty(namespaces, name, flags);
-  }
-  if (this.indexDelete && Multiname.isNumeric(name)) {
-    return this.indexDelete(name);
-  }
   var resolved = this.resolveMultinameProperty(namespaces, name, flags);
-  /**
-   * If we're in the middle of an enumeration, we need to remove the property name
-   * from the enumeration keys as well. Setting it to |VM_TOMBSTONE| will cause it
-   * to be skipped by the enumeration code.
-   */
-  if (this[VM_ENUMERATION_KEYS]) {
-    var index = this[VM_ENUMERATION_KEYS].indexOf(resolved);
-    if (index >= 0) {
-      this[VM_ENUMERATION_KEYS][index] = VM_TOMBSTONE;
-    }
-  }
   return delete this[resolved];
 }
 
@@ -499,86 +491,62 @@ function asGetDescendants(namespaces, name, flags) {
   notImplemented("asGetDescendants");
 }
 
-function asNextName(index) {
-  notImplemented("asNextName");
+/**
+ * Gets the next name index of an object. Index |zero| is actually not an
+ * index, but rather an indicator to start the iteration.
+ */
+function asNextNameIndex(index) {
+  if (index === 0) {
+    // Gather all enumerable keys since we're starting a new iteration.
+    defineNonEnumerableProperty(this, "enumerableKeys", this.asGetEnumerableKeys());
+  }
+  var enumerableKeys = this.enumerableKeys;
+  while (index < enumerableKeys.length) {
+    if (this.asHasProperty(undefined, enumerableKeys[index], 0)) {
+      return index + 1;
+    }
+    index ++;
+  }
+  return 0;
 }
 
-function asNextNameIndex(index) {
-  notImplemented("asNextNameIndex");
+/**
+ * Gets the nextName after the specified |index|, which you would expect to
+ * be index + 1, but it's actually index - 1;
+ */
+function asNextName(index) {
+  var enumerableKeys = this.enumerableKeys;
+  release || assert(enumerableKeys && index > 0 && index < enumerableKeys.length + 1);
+  return enumerableKeys[index - 1];
 }
 
 function asNextValue(index) {
-  notImplemented("asNextValue");
+  return this.asGetPublicProperty(this.asNextName(index));
+}
+
+function asGetEnumerableKeys() {
+  var boxedValue = this.valueOf();
+  // TODO: This is probably broken if the object has overwritten |valueOf|.
+  if (typeof boxedValue === "string" || typeof boxedValue === "number") {
+    return [];
+  }
+  var keys = Object.keys(this);
+  var result = [];
+  for (var i = 0; i < keys.length; i++) {
+    var key = keys[i];
+    if (isNumeric(key)) {
+      result.push(key);
+    } else {
+      var name = Multiname.stripPublicQualifier(key);
+      if (name !== undefined) {
+        result.push(name);
+      }
+    }
+  }
+  return result;
 }
 
 function initializeGlobalObject(global) {
-  function getEnumerationKeys(object) {
-    if (object.node && object.node.childNodes) {
-      object = object.node.childNodes;
-    }
-    var keys = [];
-
-    var boxedValue = object.valueOf();
-
-    // TODO: This is probably broken if the object has overwritten |valueOf|.
-    if (typeof boxedValue === "string" || typeof boxedValue === "number") {
-      return [];
-    }
-
-    if (object.getEnumerationKeys) {
-      return object.getEnumerationKeys();
-    }
-
-    // TODO: Implement fast path for Array objects.
-    for (var key in object) {
-      if (isNumeric(key)) {
-        keys.push(Number(key));
-      } else if (Multiname.isPublicQualifiedName(key)) {
-        if (object[VM_BINDINGS] && object[VM_BINDINGS].indexOf(key) >= 0) {
-          continue;
-        }
-        keys.push(key.substr(Multiname.PUBLIC_QUALIFIED_NAME_PREFIX.length));
-      }
-    }
-    return keys;
-  }
-
-  /**
-   * Gets the next name index of an object. Index |zero| is actually not an
-   * index, but rather an indicator to start the iteration.
-   */
-  defineReadOnlyProperty(global.Object.prototype, VM_NEXT_NAME_INDEX, function (index) {
-    if (index === 0) {
-      /**
-       * We're starting a new iteration. Hope that VM_ENUMERATION_KEYS haven't been
-       * defined already.
-       */
-      this[VM_ENUMERATION_KEYS] = getEnumerationKeys(this);
-    }
-
-    var keys = this[VM_ENUMERATION_KEYS];
-
-    while (index < keys.length) {
-      if (keys[index] !== VM_TOMBSTONE) {
-        return index + 1;
-      }
-      index ++;
-    }
-
-    delete this[VM_ENUMERATION_KEYS];
-    return 0;
-  });
-
-  /**
-   * Gets the nextName after the specified |index|, which you would expect to
-   * be index + 1, but it's actually index - 1;
-   */
-  defineReadOnlyProperty(global.Object.prototype, VM_NEXT_NAME, function (index) {
-    var keys = this[VM_ENUMERATION_KEYS];
-    release || assert(keys && index > 0 && index < keys.length + 1);
-    return keys[index - 1];
-  });
-
   /**
    * Surrogates are used to make |toString| and |valueOf| work transparently. For instance, the expression
    * |a + b| should implicitly expand to |a.public$valueOf() + b.public$valueOf()|. Since, we don't want
@@ -606,8 +574,8 @@ function initializeGlobalObject(global) {
     });
   });
 
-  VM_NATIVE_BUILTINS.forEach(function (o) {
-    defineReadOnlyProperty(o.prototype, VM_NATIVE_PROTOTYPE_FLAG, true);
+  ["Object", "Number", "Boolean", "String", "Array", "Date", "RegExp"].forEach(function (name) {
+    defineReadOnlyProperty(global[name].prototype, VM_NATIVE_PROTOTYPE_FLAG, true);
   });
 
   defineNonEnumerableProperty(global.Object.prototype, "getNamespaceResolutionMap", getNamespaceResolutionMap);
@@ -626,6 +594,11 @@ function initializeGlobalObject(global) {
   defineNonEnumerableProperty(global.Object.prototype, "asHasProperty", asHasProperty);
   defineNonEnumerableProperty(global.Object.prototype, "asDeleteProperty", asDeleteProperty);
 
+  defineNonEnumerableProperty(global.Object.prototype, "asNextName", asNextName);
+  defineNonEnumerableProperty(global.Object.prototype, "asNextValue", asNextValue);
+  defineNonEnumerableProperty(global.Object.prototype, "asNextNameIndex", asNextNameIndex);
+  defineNonEnumerableProperty(global.Object.prototype, "asGetEnumerableKeys", asGetEnumerableKeys);
+
   [
     "Array",
     "Int8Array",
@@ -639,15 +612,35 @@ function initializeGlobalObject(global) {
     "Float64Array"
   ].forEach(function (name) {
     if (!(name in global)) {
-      console.error(name + ' was not found in globals');
+      print(name + ' was not found in globals');
       return;
     }
     defineNonEnumerableProperty(global[name].prototype, "asGetNumericProperty", asGetNumericProperty);
     defineNonEnumerableProperty(global[name].prototype, "asSetNumericProperty", asSetNumericProperty);
+
+    defineNonEnumerableProperty(global[name].prototype, "asGetProperty", asGetPropertyLikelyNumeric);
+    defineNonEnumerableProperty(global[name].prototype, "asSetProperty", asSetPropertyLikelyNumeric);
   });
+
+  global.Array.prototype.asGetProperty = function (namespaces, name, flags) {
+    if (typeof name === "number") {
+      return this[name];
+    }
+    return asGetProperty.call(this, namespaces, name, flags);
+  };
+
+  global.Array.prototype.asSetProperty = function (namespaces, name, flags, value) {
+    if (typeof name === "number") {
+      this[name] = value;
+      return;
+    }
+    return asSetProperty.call(this, namespaces, name, flags, value);
+  };
 }
 
 initializeGlobalObject(jsGlobal);
+
+// initializeGlobalObject(jsGlobal);
 
 /**
  * Checks if the specified |object| is the prototype of a native JavaScript object.
@@ -689,11 +682,11 @@ function publicizeProperties(object) {
   }
 }
 
-function getSlot(object, index) {
+function asGetSlot(object, index) {
   return object[object[VM_SLOTS][index].name];
 }
 
-function setSlot(object, index, value) {
+function asSetSlot(object, index, value) {
   var binding = object[VM_SLOTS][index];
   if (binding.const) {
     return;
@@ -707,19 +700,10 @@ function setSlot(object, index, value) {
   }
 }
 
-function nextName(object, index) {
-  return object[VM_NEXT_NAME](index);
-}
-
-function nextValue(object, index) {
-  return object.asGetProperty(undefined, object[VM_NEXT_NAME](index));
-}
-
 /**
- * Determine if the given object has any more properties after the specified |index| in the given |obj|
- * and if so, return the next index or |zero| otherwise. If the |obj| has no more properties then continue
- * the search in |obj.__proto__|. This function returns an updated index and object to be used during
- * iteration.
+ * Determine if the given object has any more properties after the specified |index| and if so, return
+ * the next index or |zero| otherwise. If the |obj| has no more properties then continue the search in
+ * |obj.__proto__|. This function returns an updated index and object to be used during iteration.
  *
  * the |for (x in obj) { ... }| statement is compiled into the following pseudo bytecode:
  *
@@ -739,23 +723,27 @@ function nextValue(object, index) {
  *
  * TODO: We can't match the iteration order semantics of Action Script, hopefully programmers don't rely on it.
  */
-function hasNext2(object, index) {
-  if (object === null || object === undefined) {
+function asHasNext2(object, index) {
+  if (isNullOrUndefined(object)) {
     return {index: 0, object: null};
   }
   object = boxValue(object);
-  release || assert(object);
-  release || assert(index >= 0);
-
-  /**
-   * Because I don't think hasnext/hasnext2/nextname opcodes are used outside
-   * of loops in "normal" ABC code, we can deviate a little for semantics here
-   * and leave the prototype-chaining to the |for..in| operator in JavaScript
-   * itself, in |obj[VM_NEXT_NAME_INDEX]|. That is, the object pushed onto the
-   * stack, if the original object has any more properties left, will _always_
-   * be the original object.
-   */
-  return {index: object[VM_NEXT_NAME_INDEX](index), object: object};
+  var nextIndex = object.asNextNameIndex(index);
+  if (nextIndex > 0) {
+    return {index: nextIndex, object: object};
+  }
+  // If there are no more properties in the object then follow the prototype chain.
+  while (true) {
+    var object = Object.getPrototypeOf(object);
+    if (!object) {
+      return {index: 0, object: null};
+    }
+    nextIndex = object.asNextNameIndex(0);
+    if (nextIndex > 0) {
+      return {index: nextIndex, object: object};
+    }
+  }
+  return {index: 0, object: null};
 }
 
 function getDescendants(object, mn) {
@@ -859,9 +847,9 @@ var ScopeStack = (function () {
 
 var Scope = (function () {
   function scope(parent, object, isWith) {
-    release || assert (isObject(object));
     this.parent = parent;
-    this.object = object;
+    this.object = boxValue(object);
+    release || assert (isObject(this.object));
     this.global = parent ? parent.global : this;
     this.isWith = isWith;
     this.cache = createEmptyObject();
@@ -1224,30 +1212,29 @@ function CatchScopeObject(domain, trait) {
  * Global object for a script.
  */
 var Global = (function () {
-  function Global(script) {
+  function global(script) {
     this.scriptInfo = script;
     script.global = this;
     script.scriptBindings = new ScriptBindings(script, new Scope(null, this));
-    script.scriptBindings.applyTo(script.abc.domain, this);
-    // applyScriptTraits(script.abc.domain, this, new Scope(null, this), script.traits);
+    script.scriptBindings.applyTo(script.abc.applicationDomain, this);
     script.loaded = true;
   }
-  Global.prototype.toString = function () {
+  global.prototype.toString = function () {
     return "[object global]";
   };
-  Global.prototype.isExecuted = function () {
+  global.prototype.isExecuted = function () {
     return this.scriptInfo.executed;
   };
-  Global.prototype.isExecuting = function () {
+  global.prototype.isExecuting = function () {
     return this.scriptInfo.executing;
   };
-  Global.prototype.ensureExecuted = function () {
+  global.prototype.ensureExecuted = function () {
     ensureScriptIsExecuted(this.scriptInfo);
   };
-  defineNonEnumerableProperty(Global.prototype, Multiname.getPublicQualifiedName("toString"), function () {
+  defineNonEnumerableProperty(global.prototype, Multiname.getPublicQualifiedName("toString"), function () {
     return this.toString();
   });
-  return Global;
+  return global;
 })();
 
 function canCompile(mi) {
@@ -1349,29 +1336,8 @@ function debugName(value) {
   return value;
 }
 
-function createCompiledFunctionTrampoline(methodInfo, scope, hasDynamicScope, breakpoint) {
-  var mi = methodInfo;
-  // Return a trampoline that compiles the instance initializer when called for the first time.
-  return function trampolineContext() {
-    var fn;
-    return function () {
-      if (!fn) {
-        // Compile function and patch callers.
-        // FIXME Many call sites have already been compiled (e.g. from derived class constructors). Might need
-        // a better patching strategy.
-        fn = mi.freeMethod = createCompiledFunction(mi, scope, hasDynamicScope, breakpoint);
-        mi.freeMethod.methodInfo = mi;
-      }
-      return fn.apply(this, arguments);
-    }
-  }();
-}
-
 function createCompiledFunction(methodInfo, scope, hasDynamicScope, breakpoint, deferCompilation) {
   var mi = methodInfo;
-  if (false && deferCompilation) {
-    return createCompiledFunctionTrampoline(methodInfo, scope, hasDynamicScope, breakpoint);
-  }
   $M.push(mi);
   var result = Compiler.compileMethod(mi, scope, hasDynamicScope);
   var parameters = result.parameters;
@@ -1404,11 +1370,9 @@ function createCompiledFunction(methodInfo, scope, hasDynamicScope, breakpoint, 
   if (traceLevel.value > 1) {
     mi.trace(new IndentingWriter(), mi.abc);
   }
-  mi.debugTrace = (function (abc) {
-    return function () {
-      mi.trace(new IndentingWriter(), abc);
-    }
-  })(this.abc);
+  mi.debugTrace = function () {
+    mi.trace(new IndentingWriter(), mi.abc);
+  };
   if (traceLevel.value > 0) {
     print (fnSource);
   }
@@ -1654,7 +1618,7 @@ function createFunction(mi, scope, hasDynamicScope, breakpoint) {
   totalFunctionCount ++;
 
   var useInterpreter = false;
-  if ((mi.abc.domain.mode === EXECUTION_MODE.INTERPRET || !shouldCompile(mi)) && !forceCompile(mi)) {
+  if ((mi.abc.applicationDomain.mode === EXECUTION_MODE.INTERPRET || !shouldCompile(mi)) && !forceCompile(mi)) {
     useInterpreter = true;
   }
 
@@ -1704,7 +1668,7 @@ function ensureFunctionIsInitialized(methodInfo) {
 
     if (mi.needsActivation()) {
       mi.activationPrototype = new Activation(mi);
-      new ActivationBindings(mi).applyTo(mi.abc.domain, mi.activationPrototype);
+      new ActivationBindings(mi).applyTo(mi.abc.applicationDomain, mi.activationPrototype);
     }
 
     // If we have exceptions, make the catch scopes now.
@@ -1717,7 +1681,7 @@ function ensureFunctionIsInitialized(methodInfo) {
         varTrait.name = handler.varName;
         varTrait.typeName = handler.typeName;
         varTrait.holder = mi;
-        handler.scopeObject = new CatchScopeObject(mi.abc.domain, varTrait);
+        handler.scopeObject = new CatchScopeObject(mi.abc.applicationDomain, varTrait);
       } else {
         handler.scopeObject = new CatchScopeObject();
       }
@@ -1810,7 +1774,7 @@ function createClass(classInfo, baseClass, scope) {
 
   var ci = classInfo;
   var ii = ci.instanceInfo;
-  var domain = ci.abc.domain;
+  var domain = ci.abc.applicationDomain;
 
   var className = Multiname.getName(ii.name);
   if (traceExecution.value) {
@@ -1909,8 +1873,24 @@ function applyType(domain, factory, types) {
   }
 }
 
+function checkArgumentCount(name, expected, got) {
+  if (got !== expected) {
+    throwError("ArgumentError", Errors.WrongArgumentCountError, name, expected, got);
+  }
+}
+
+function throwError(name, error) {
+  if (true) {
+    var message = formatErrorMessage.apply(null, Array.prototype.slice.call(arguments, 1));
+    throwErrorFromVM(AVM2.currentDomain(), name, message, error.code);
+  } else {
+    throwErrorFromVM(AVM2.currentDomain(), name, getErrorMessage(error.code), error.code);
+  }
+}
+
 function throwErrorFromVM(domain, errorClass, message, id) {
-  throw new (domain.getClass(errorClass)).instanceConstructor(message, id);
+  var error = new (domain.getClass(errorClass)).instanceConstructor(message, id);
+  throw error;
 }
 
 function translateError(domain, error) {
@@ -1987,7 +1967,7 @@ function asCoerceString(x) {
   } else if (x == undefined) {
     return null;
   }
-  return String(x);
+  return x + '';
 }
 
 function asCoerceInt(x) {
@@ -1995,7 +1975,7 @@ function asCoerceInt(x) {
 }
 
 function asCoerceUint(x) {
-  return toUint(x);
+  return x >>> 0;
 }
 
 function asCoerceNumber(x) {
@@ -2021,12 +2001,15 @@ function asDefaultCompareFunction(a, b) {
 }
 
 function asCompare(a, b, options, compareFunction) {
-  release || assertNotImplemented (!(options & SORT_CASEINSENSITIVE), "CASEINSENSITIVE");
   release || assertNotImplemented (!(options & SORT_UNIQUESORT), "UNIQUESORT");
   release || assertNotImplemented (!(options & SORT_RETURNINDEXEDARRAY), "RETURNINDEXEDARRAY");
   var result = 0;
   if (!compareFunction) {
     compareFunction = asDefaultCompareFunction;
+  }
+  if (options & SORT_CASEINSENSITIVE) {
+    a = String(a).toLowerCase();
+    b = String(b).toLowerCase();
   }
   if (options & SORT_NUMERIC) {
     a = toNumber(a);

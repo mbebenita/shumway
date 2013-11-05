@@ -16,6 +16,8 @@
  * limitations under the License.
  */
 
+/* global Errors, throwError */
+
 /**
  * Stubs Overview
  *
@@ -74,8 +76,8 @@
 
 function bindNativeClassDefinition(nativeName, definition) {
   // Hook up the native.
-  natives[nativeName] = function (runtime, scope, instanceConstructor, baseClass) {
-    var c = new Class(undefined, instanceConstructor, Domain.coerceCallable);
+  natives[nativeName] = function (domain, scope, instanceConstructor, baseClass) {
+    var c = new Class(undefined, instanceConstructor, ApplicationDomain.coerceCallable);
     c.extend(baseClass);
     c.linkNatives(definition);
     return c;
@@ -192,6 +194,8 @@ var Stubs = new (function () {
     M("flash.display.FrameLabel", "FrameLabelClass", FrameLabelDefinition),
     M("flash.display.Scene"),
     M("flash.display.BlendMode"),
+    M("flash.display.Shader", "ShaderClass", ShaderDefinition),
+    M("flash.display.ShaderData", "ShaderDataClass", ShaderDataDefinition),
 
     M("flash.filters.BevelFilter", "BevelFilterClass", BevelFilterDefinition),
     M("flash.filters.BitmapFilter", "BitmapFilterClass", BitmapFilterDefinition),
@@ -235,8 +239,18 @@ var Stubs = new (function () {
     M("flash.text.Font", "FontClass", FontDefinition),
     M("flash.text.TextField", "TextFieldClass", TextFieldDefinition),
     M("flash.text.StaticText", "StaticTextClass", StaticTextDefinition),
+    M("flash.text.StyleSheet", "StyleSheetClass", StyleSheetDefinition),
     M("flash.text.TextFormat", "TextFormatClass", TextFormatDefinition),
+    M("flash.text.TextLineMetrics"),
+    M("flash.text.engine.ContentElement", "ContentElementClass", ContentElementDefinition),
+    M("flash.text.engine.ElementFormat", "ElementFormatClass", ElementFormatDefinition),
     M("flash.text.engine.FontDescription", "FontDescriptionClass", FontDescriptionDefinition),
+    M("flash.text.engine.GroupElement", "GroupElementClass", GroupElementDefinition),
+    M("flash.text.engine.SpaceJustifier", "SpaceJustifierClass", SpaceJustifierDefinition),
+    M("flash.text.engine.TextBlock", "TextBlockClass", TextBlockDefinition),
+    M("flash.text.engine.TextElement", "TextElementClass", TextElementDefinition),
+    M("flash.text.engine.TextJustifier", "TextJustifierClass", TextJustifierDefinition),
+    M("flash.text.engine.TextLine", "TextLineClass", TextLineDefinition),
 
     M("flash.media.Sound", "SoundClass", SoundDefinition),
     M("flash.media.SoundChannel", "SoundChannelClass", SoundChannelDefinition),
@@ -244,7 +258,9 @@ var Stubs = new (function () {
     M("flash.media.SoundTransform", "SoundTransformClass", SoundTransformDefinition),
     M("flash.media.Video", "VideoClass", VideoDefinition),
     M("flash.media.ID3Info", "ID3InfoClass", ID3InfoDefinition),
+    M("flash.media.Microphone", "MicrophoneClass", MicrophoneDefinition),
 
+    M("flash.net.FileFilter", "FileFilterClass", FileFilterDefinition),
     M("flash.net.NetConnection", "NetConnectionClass", NetConnectionDefinition),
     M("flash.net.NetStream", "NetStreamClass", NetStreamDefinition),
     M("flash.net.Responder", "ResponderClass", ResponderDefinition),
@@ -254,6 +270,7 @@ var Stubs = new (function () {
     M("flash.net.SharedObject", "SharedObjectClass", SharedObjectDefinition),
     M("flash.net.ObjectEncoding", "ObjectEncodingClass", ObjectEncodingDefinition),
     M("flash.net.LocalConnection", "LocalConnectionClass", LocalConnectionDefinition),
+    M("flash.net.Socket", "SocketClass", SocketDefinition),
     M("flash.net.URLVariables"),
 
     M("packageInternal flash.system.FSCommand", "FSCommandClass", FSCommandDefinition),
@@ -296,7 +313,7 @@ var Stubs = new (function () {
   });
 })();
 
-natives["FlashUtilScript::getAliasName"] = function (runtime, scope, instanceConstructor, baseClass) {
+natives["FlashUtilScript::getAliasName"] = function (domain, scope, instanceConstructor, baseClass) {
 //  notImplemented("FlashUtilScript::getAliasName");
   return function getAliasName(value) {
     // FIXME don't know what is expected here
@@ -306,25 +323,31 @@ natives["FlashUtilScript::getAliasName"] = function (runtime, scope, instanceCon
 
 natives['FlashUtilScript::getDefinitionByName'] = natives.getDefinitionByName;
 
-natives['FlashUtilScript::getTimer'] = function GetTimerMethod(runtime, scope, instanceConstructor, baseClass) {
+natives['FlashUtilScript::getTimer'] = function GetTimerMethod(domain, scope, instanceConstructor, baseClass) {
   var start = Date.now();
   return function getTimer() {
     return Date.now() - start;
   };
 };
 
-natives['FlashUtilScript::escapeMultiByte'] = function EscapeMultiByteMethod(runtime, scope, instanceConstructor, baseClass) {
+natives['FlashUtilScript::escapeMultiByte'] = function EscapeMultiByteMethod(domain, scope, instanceConstructor, baseClass) {
   return escape;
 };
 
-natives['FlashUtilScript::unescapeMultiByte'] = function UnescapeMultiByteMethod(runtime, scope, instanceConstructor, baseClass) {
+natives['FlashUtilScript::unescapeMultiByte'] = function UnescapeMultiByteMethod(domain, scope, instanceConstructor, baseClass) {
   return unescape;
 };
 
-natives['FlashNetScript::navigateToURL'] = function GetNavigateToURLMethod(runtime, scope, instanceConstructor, baseClass) {
+natives['FlashNetScript::navigateToURL'] = function GetNavigateToURLMethod(domain, scope, instanceConstructor, baseClass) {
   return function navigateToURL(request, window_) {
-    if (!request || !request.url)
-      throw new Error('Invalid request object');
+    if (request === null || request === undefined) {
+      throwError('TypeError', Errors.NullPointerError, 'request');
+    }
+    var RequestClass = avm2.systemDomain.getClass("flash.net.URLRequest");
+    if (!RequestClass.isInstanceOf(request)) {
+      throwError('TypeError', Errors.CheckTypeFailedError, request,
+                 'flash.net.URLRequest');
+    }
     var url = request.url;
     if (/^fscommand:/i.test(url)) {
       var fscommand = avm2.applicationDomain.getProperty(
@@ -337,23 +360,29 @@ natives['FlashNetScript::navigateToURL'] = function GetNavigateToURLMethod(runti
   };
 };
 
-natives['FlashNetScript::sendToURL'] = function GetSendToURLMethod(runtime, scope, instanceConstructor, baseClass) {
+natives['FlashNetScript::sendToURL'] = function GetSendToURLMethod(domain, scope, instanceConstructor, baseClass) {
   return function sendToURL(request) {
-    if (!request || !request.url)
-      throw new Error('Invalid request object');
+    if (request === null || request === undefined) {
+      throwError('TypeError', Errors.NullPointerError, 'request');
+    }
+    var RequestClass = avm2.systemDomain.getClass("flash.net.URLRequest");
+    if (!RequestClass.isInstanceOf(request)) {
+      throwError('TypeError', Errors.CheckTypeFailedError, request,
+                 'flash.net.URLRequest');
+    }
     var session = FileLoadingService.createSession();
     session.onprogress = function () {};
     session.open(request);
   };
 };
 
-natives['Toplevel::registerClassAlias'] = function GetRegisterClassAliasMethod(runtime, scope, instance, baseClass) {
+natives['Toplevel::registerClassAlias'] = function GetRegisterClassAliasMethod(domain, scope, instance, baseClass) {
   return function registerClassAlias(aliasName, classObject) {
     if (!aliasName) {
-      throw new TypeError(formatErrorMessage(Errors.NullPointerError, 'aliasName'));
+      throwError('TypeError', Errors.NullPointerError, 'aliasName');
     }
     if (!classObject) {
-      throw new TypeError(formatErrorMessage(Errors.NullPointerError, 'classObject'));
+      throwError('TypeError', Errors.NullPointerError, 'classObject');
     }
 
     AMFUtils.aliasesCache.classes.set(classObject, aliasName);
@@ -361,15 +390,15 @@ natives['Toplevel::registerClassAlias'] = function GetRegisterClassAliasMethod(r
   };
 };
 
-natives['Toplevel::getClassByAlias'] = function GetGetClassByAliasMethod(runtime, scope, instance, baseClass) {
+natives['Toplevel::getClassByAlias'] = function GetGetClassByAliasMethod(domain, scope, instance, baseClass) {
   return function getClassByAlias(aliasName) {
     if (!aliasName) {
-      throw new TypeError(formatErrorMessage(Errors.NullPointerError, 'aliasName'));
+      throwError('TypeError', Errors.NullPointerError, 'aliasName');
     }
 
     var classObject = AMFUtils.aliasesCache.names[aliasName];
     if (!classObject) {
-      throw ReferenceError();
+      throwError('ReferenceError', Errors.ClassNotFoundError, aliasName);
     }
     return classObject;
   };
