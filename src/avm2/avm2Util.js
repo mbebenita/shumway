@@ -234,6 +234,16 @@ function isPowerOfTwo(x) {
   return x && ((x & (x - 1)) === 0);
 }
 
+function ceil(v) {
+  if ((v | 0) === v) {
+    return v;
+  }
+  if (v >= 0) {
+    return (v + 1) | 0;
+  }
+  return v | 0;
+}
+
 function time(fn, count) {
   var start = performance.now();
   for (var i = 0; i < count; i++) {

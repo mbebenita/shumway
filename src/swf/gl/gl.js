@@ -1,6 +1,388 @@
 (function (exports) {
   "use strict";
 
+  var Point = (function () {
+    function point (x, y) {
+      this.x = x;
+      this.y = y;
+    }
+    point.prototype.set = function (x, y) {
+      this.x = x;
+      this.y = y;
+    };
+    return point;
+  })();
+
+  var Rectangle = (function () {
+    function rectangle (x, y, w, h) {
+      this.x = x;
+      this.y = y;
+      this.w = w;
+      this.h = h;
+    }
+
+    rectangle.prototype.set = function (x, y, w, h) {
+      this.x = x;
+      this.y = y;
+      this.w = w;
+      this.h = h;
+    };
+
+    rectangle.prototype.contains = function (rect) {
+      var r1 = rect.x + rect.w;
+      var b1 = rect.y + rect.h;
+      var r2 = this.x + this.w;
+      var b2 = this.y + this.h;
+
+      return ((rect.x >= this.x) &&
+        (rect.x < r2) &&
+        (rect.y >= this.y) &&
+        (rect.y < b2) &&
+        (r1 > this.x) &&
+        (r1 <= r2) &&
+        (b1 > this.y) &&
+        (b1 <= b2));
+    };
+
+    rectangle.prototype.union = function (other) {
+      var x = this.x, y = this.y;
+      if (this.x > other.x) {
+        x = other.x;
+      }
+      if (this.y > other.y) {
+        y = other.y;
+      }
+      var x0 = this.x + this.w;
+      if (x0 < other.x + other.w) {
+        x0 = other.x + other.w;
+      }
+      var y0 = this.y + this.h;
+      if (y0 < other.y + other.h) {
+        y0 = other.y + other.h;
+      }
+      this.x = x;
+      this.y = y;
+      this.w = x0 - x;
+      this.h = y0 - y;
+    };
+
+    rectangle.prototype.intersect = function (other) {
+      var result = new Rectangle();
+      if (this.isEmpty() || other.isEmpty()) {
+        result.setEmpty();
+        return result;
+      }
+      result.x = Math.max(this.x, other.x);
+      result.y = Math.max(this.y, other.y);
+      result.w = Math.min(this.x + this.w, other.x + other.w) - result.x;
+      result.h = Math.min(this.y + this.h, other.y + other.h) - result.y;
+
+      if (result.w <= 0 || result.h <= 0) {
+        result.empty();
+      }
+      Rectangle.set(this, result);
+      return result;
+    };
+
+    rectangle.prototype.empty = function () {
+      this.x = 0;
+      this.y = 0;
+      this.w = 0;
+      this.h = 0;
+    };
+
+    rectangle.prototype.intersects = function (other) {
+      if (this.isEmpty() || other.isEmpty()) {
+        return false;
+      }
+      var x = Math.max(this.x, other.x);
+      var y = Math.max(this.y, other.y);
+      var w = Math.min(this.x + this.w, other.x + other.w) - x;
+      var h = Math.min(this.y + this.h, other.y + other.h) - y;
+      if (w <= 0 || h <= 0) {
+        return false;
+      }
+      return true;
+    };
+
+    rectangle.prototype.isEmpty = function () {
+      return this.w <= 0 || this.h <= 0;
+    };
+
+    rectangle.prototype.area = function () {
+      return this.w * this.h;
+    };
+
+    rectangle.prototype.clone = function () {
+      return new rectangle(this.x, this.y, this.w, this.h);
+    };
+
+    /**
+     * Snaps the rectangle to pixel boundaries. The computed rectangle covers
+     * the original rectangle.
+     */
+    rectangle.prototype.snap = function () {
+      var x1 = ceil(this.x + this.w);
+      var y1 = ceil(this.y + this.h);
+      this.x |= 0;
+      this.y |= 0;
+      this.w = x1 - this.x;
+      this.h = y1 - this.y;
+    };
+
+    rectangle.prototype.toString = function () {
+      return "{" +
+        this.x + ", " +
+        this.y + ", " +
+        this.w + ", " +
+        this.h +
+      "}";
+    };
+
+    rectangle.createEmpty = function () {
+      return new rectangle(0, 0, 0, 0);
+    };
+
+    rectangle.set = function (dst, src) {
+      dst.x = src.x;
+      dst.y = src.y;
+      dst.w = src.w;
+      dst.h = src.h;
+    };
+
+    return rectangle;
+  })();
+
+  var Transform = (function () {
+    function transform(m11, m12, m21, m22, dx, dy) {
+      this.a = m11;
+      this.b = m12;
+      this.c = m21;
+      this.d = m22;
+      this.e = dx;
+      this.f = dy;
+    }
+
+    transform.prototype.set = function (m11, m12, m21, m22, dx, dy) {
+      this.a = m11;
+      this.b = m12;
+      this.c = m21;
+      this.d = m22;
+      this.e = dx;
+      this.f = dy;
+    };
+
+    transform.prototype.clone = function() {
+      return new transform(this.a, this.b, this.c, this.d, this.e, this.f);
+    };
+
+    transform.prototype.transform = function(m11, m12, m21, m22, dx, dy) {
+      var a = this.a, b = this.b, c = this.c, d = this.d, e = this.e, f = this.f;
+      this.a = a * m11 + c * m12;
+      this.b = b * m11 + d * m12;
+      this.c = a * m21 + c * m22;
+      this.d = b * m21 + d * m22;
+      this.e = a *  dx + c * dy + e;
+      this.f = b *  dx + d * dy + f;
+    };
+
+    transform.prototype.transformRectangleAABB = function(rectangle) {
+      var a = this.a;
+      var b = this.b;
+      var c = this.c;
+      var d = this.d;
+      var e = this.e;
+      var f = this.f;
+
+      var x = rectangle.x;
+      var y = rectangle.y;
+      var w = rectangle.w;
+      var h = rectangle.h;
+
+      var x0 = a * x + c * y + e;
+      var y0 = b * x + d * y + f;
+
+      var x1 = a * (x + w) + c * y + e;
+      var y1 = b * (x + w) + d * y + f;
+
+      var x2 = a * (x + w) + c * (y + h) + e;
+      var y2 = b * (x + w) + d * (y + h) + f;
+
+      var x3 = a * x + c * (y + h) + e;
+      var y3 = b * x + d * (y + h) + f;
+
+      rectangle.x = Math.min(x0, x1, x2, x3);
+      rectangle.w = Math.max(x0, x1, x2, x3) - rectangle.x;
+
+      rectangle.y = Math.min(y0, y1, y2, y3);
+      rectangle.h = Math.max(y0, y1, y2, y3) - rectangle.y;
+    };
+
+    transform.prototype.transformRectangleAABB = function(rectangle) {
+      var a = this.a;
+      var b = this.b;
+      var c = this.c;
+      var d = this.d;
+      var e = this.e;
+      var f = this.f;
+
+      var x = rectangle.x;
+      var y = rectangle.y;
+      var w = rectangle.w;
+      var h = rectangle.h;
+
+      var x0 =  + c * y + e;
+      var y0 = b * x + d * y + f;
+      var x1 = a * (x + w) + c * y + e;
+      var y1 = b * (x + w) + d * y + f;
+      var x2 = a * (x + w) + c * (y + h) + e;
+      var y2 = b * (x + w) + d * (y + h) + f;
+      var x3 = a * x + c * (y + h) + e;
+      var y3 = b * x + d * (y + h) + f;
+
+      var tmp = 0;
+
+      // Manual Min/Max is a lot faster than calling Math.min/max
+      // X Min-Max
+      if (x0 > x1) { tmp = x0; x0 = x1; x1 = tmp; }
+      if (x2 > x3) { tmp = x2; x2 = x3; x3 = tmp; }
+
+      rectangle.x = x0 < x2 ? x0 : x2;
+      rectangle.w = (x1 > x3 ? x1 : x3) - rectangle.x;
+
+      // Y Min-Max
+      if (y0 > y1) { tmp = y0; y0 = y1; y1 = tmp; }
+      if (y2 > y3) { tmp = y2; y2 = y3; y3 = tmp; }
+
+      rectangle.y = y0 < y2 ? y0 : y2;
+      rectangle.h = (y1 > y3 ? y1 : y3) - rectangle.y;
+    };
+
+    transform.prototype.scale = function(x, y) {
+      this.a *= x;
+      this.b *= x;
+      this.c *= y;
+      this.d *= y;
+    };
+
+    transform.prototype.rotate = function (angle) {
+      var a = this.a, b = this.b, c = this.c, d = this.d, e = this.e, f = this.f;
+      var u = Math.cos(angle);
+      var v = Math.sin(angle);
+      this.a = a * u + c * v;
+      this.b = b * u + d * v;
+      this.c = a * -v + c * u;
+      this.d = b * -v + d * u;
+      this.e = e;
+      this.f = f;
+    };
+
+    transform.prototype.translate = function(x, y) {
+      this.e = this.a * x + this.c * y + this.e;
+      this.f = this.b * x + this.d * y + this.f;
+    };
+
+    transform.prototype.reset = function () {
+      this.a = 1;
+      this.b = 0;
+      this.c = 0;
+      this.d = 1;
+      this.e = 0;
+      this.f = 0;
+    };
+
+    transform.prototype.transformPoint = function (point) {
+      var x = point.x;
+      var y = point.y;
+      point.x = this.a * x + this.c * y + this.e;
+      point.y = this.b * x + this.d * y + this.f;
+    };
+
+    transform.prototype.inverse = function (result) {
+      var m11 = this.a;
+      var m12 = this.b;
+      var m21 = this.c;
+      var m22 = this.d;
+      var dx  = this.e;
+      var dy  = this.f;
+      if (m12 === 0.0 && m21 === 0.0) {
+        m11 = 1.0 / m11;
+        m22 = 1.0 / m22;
+        m12 = m21 = 0.0;
+        dx = -m11 * dx;
+        dy = -m22 * dy;
+      } else {
+        var a = m11, b = m12, c = m21, d = m22;
+        var determinant = a * d - b * c;
+        if (determinant === 0.0) {
+          assert(false);
+          return;
+        }
+        determinant = 1.0 / determinant;
+        m11 =  d * determinant;
+        m12 = -b * determinant;
+        m21 = -c * determinant;
+        m22 =  a * determinant;
+        var ty = -(m12 * dx + m22 * dy);
+        dx = -(m11 * dx + m21 * dy);
+        dy = ty;
+      }
+      result.a = m11;
+      result.b = m12;
+      result.c = m21;
+      result.d = m22;
+      result.e = dx;
+      result.f = dy;
+    };
+
+    Object.defineProperty(transform.prototype, "x", {
+      get: function () {
+        return this.e;
+      },
+      set: function (x) {
+        this.e = x;
+      }
+    });
+
+    Object.defineProperty(transform.prototype, "y", {
+      get: function () {
+        return this.f;
+      },
+      set: function (y) {
+        this.f = y;
+      }
+    });
+
+    transform.prototype.toString = function () {
+      return "{" +
+        this.a + ", " +
+        this.b + ", " +
+        this.c + ", " +
+        this.d + ", " +
+        this.e + ", " +
+        this.f +
+      "}";
+    };
+    transform.createIdentity = function () {
+      return new transform(1, 0, 0, 1, 0, 0);
+    };
+
+    transform.set = function (dst, src) {
+      dst.a = src.a;
+      dst.b = src.b;
+      dst.c = src.c;
+      dst.d = src.d;
+      dst.e = src.e;
+      dst.f = src.f;
+    };
+
+    transform.mul = function (dst, src) {
+      dst.transform(src.a, src.b, src.c, src.d, src.e, src.f);
+    };
+
+    return transform;
+  })();
+
   function matrixTranspose(r, c, m) {
     assert (r * c === m.length);
     var result = new Float32Array(m.length);
@@ -539,6 +921,9 @@
     return draw;
   })();
 
+  exports.Point = Point;
+  exports.Rectangle = Rectangle;
+  exports.Transform = Transform;
   exports.Path = Path;
   exports.SimplePath = SimplePath;
   exports.Geometry = Geometry;
