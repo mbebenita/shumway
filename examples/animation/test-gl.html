@@ -21,7 +21,7 @@
   <script src="../../src/swf/gl/gl.js"></script>
   <script src="../../src/swf/gl/canvas-gl.js"></script>
 
-  <script src="../inspector/js/classes/FPS.js"></script>
+  <script src="../inspector/js/classes/Timeline.js"></script>
   <script src="../inspector/js/classes/Terminal.js"></script>
   <style>
     #debugInfoContainer {
@@ -145,7 +145,7 @@
       appendToTraceTerminal([].join.call(arguments, " "), "#FF6700");
     };
 
-    var fps = new FPS(document.getElementById("fpsCanvas"));
+    var fps = new Timeline(document.getElementById("fpsCanvas"));
     fps.setFrameRate(60);
     fps.refreshEvery(10);
     ctx.font = 14 + 'px Consolas, "Liberation Mono", Courier, monospace';

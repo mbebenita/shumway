@@ -1,7 +1,7 @@
 /**
  * Frame Rate Monitor
  */
-var FPS = (function () {
+var Timeline = (function () {
   var barColor = "rgba(255,255,255, 0.075)";
   var barOverColor = "rgba(255,255,255, 0.2)";
   var backgroundColor = "rgb(61, 61, 61)";
@@ -9,7 +9,7 @@ var FPS = (function () {
   var fpsLineColor = "rgb(255,64,0)";
   var textColor = "#ccc";
 
-  function fps(canvas) {
+  function timeline(canvas) {
     this.depth = 0;
     this.start = 0;
     this.index = 0;
@@ -28,13 +28,13 @@ var FPS = (function () {
     this.resizeHandler();
   }
 
-  fps.prototype.setFrameRate = function setFrameRate(frameRate) {
+  timeline.prototype.setFrameRate = function setFrameRate(frameRate) {
     var scale = 2;
     this.frameRate = frameRate;
     this.maxFrameTime = scale * 1000 * 2 / frameRate;
   };
 
-  fps.prototype.refreshEvery = function refreshEvery(freq) {
+  timeline.prototype.refreshEvery = function refreshEvery(freq) {
     this.refreshFrequency = freq;
     this.refreshCounter = 0;
   };
@@ -42,7 +42,7 @@ var FPS = (function () {
   var ENTER = 0xBEEF0000 | 0;
   var LEAVE = 0xDEAD0000 | 0;
 
-  fps.prototype.registerKind = function getKind(name, fillStyle) {
+  timeline.prototype.registerKind = function getKind(name, fillStyle) {
     if (this.kinds[name] === undefined) {
       this.fillStyles[this.kindCount] = fillStyle;
       this.kinds[name] = this.kindCount++;
@@ -51,7 +51,7 @@ var FPS = (function () {
     }
   };
 
-  fps.prototype.getKind = function getKind(name) {
+  timeline.prototype.getKind = function getKind(name) {
     if (this.kinds[name] === undefined) {
       this.kinds[name] = this.kindCount ++;
       if (this.kindCount > this.fillStyles.length) {
@@ -61,13 +61,13 @@ var FPS = (function () {
     return this.kinds[name];
   };
 
-  fps.prototype.enter = function enter(name) {
+  timeline.prototype.enter = function enter(name) {
     this.depth++;
     this.marks.write(ENTER | this.getKind(name));
     this.times.write(performance.now());
   };
 
-  fps.prototype.leave = function leave(name) {
+  timeline.prototype.leave = function leave(name) {
     this.marks.write(LEAVE | this.getKind(name));
     this.times.write(performance.now());
     this.depth--;
@@ -80,7 +80,7 @@ var FPS = (function () {
     }
   };
 
-  fps.prototype.gatherFrames = function gatherFrames(maxFrames) {
+  timeline.prototype.gatherFrames = function gatherFrames(maxFrames) {
     var stack = [];
     var frames = [];
     var times = this.times;
@@ -113,10 +113,11 @@ var FPS = (function () {
     return frames;
   };
 
-  fps.prototype.resizeHandler = function resizeHandler(event) {
+  timeline.prototype.resizeHandler = function resizeHandler(event) {
     var parent = this.canvas.parentElement;
-    this.cw = parent.offsetWidth;
-    this.ch = parent.offsetHeight - 1;
+    this.cw = parent.clientWidth;
+    // this.ch = parent.offsetHeight - 1;
+    this.ch = 100;
 
     var devicePixelRatio = window.devicePixelRatio || 1;
     var backingStoreRatio = this.context.webkitBackingStorePixelRatio ||
@@ -140,7 +141,7 @@ var FPS = (function () {
     this.context.font = 11 + 'px Consolas, "Liberation Mono", Courier, monospace';
   };
 
-  fps.prototype.paint = function paint() {
+  timeline.prototype.paint = function paint() {
     //var t = performance.now();
     var w = 10;
     var gap = 1;
@@ -234,9 +235,7 @@ var FPS = (function () {
       textOffset -= context.measureText(k).width + 10;
       this.context.fillText(k, textOffset, 13);
     }
-    //var tt = performance.now() - t;
-    //console.log(tt + " ms", t1, tt-t1);
   };
 
-  return fps;
+  return timeline;
 })();

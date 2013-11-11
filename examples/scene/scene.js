@@ -20,6 +20,7 @@ Animator.Rotate = (function () {
     Animator.call(this, frame);
     this.time = time;
     this.speed = Math.random() / 10;
+    this.speed = 0.05;
   }
   rotate.prototype = Object.create(Animator.prototype);
   rotate.prototype.step = function (time) {
@@ -36,17 +37,16 @@ Animator.Scale = (function () {
   function rotate(frame, time) {
     Animator.call(this, frame);
     this.time = time;
-    this.speed = Math.random() / 50;
+    this.speed = Math.random();
   }
   rotate.prototype = Object.create(Animator.prototype);
   rotate.prototype.step = function (time) {
     if (time > this.time) {
       return false;
     }
-    var x = Math.sin(time / 1000) * this.speed;
-    var y = Math.cos(time / 1000) * this.speed;
-
-    this.frame.scale(1 - x, 1 - y);
+    var x = Math.sin(time / 500) / 50;
+    var y = Math.cos(time / 500) / 100;
+    this.frame.scale(1 - x, 1);
     return true;
   };
   return rotate;
@@ -56,14 +56,15 @@ Animator.Slide = (function () {
   function slide(frame, time) {
     Animator.call(this, frame);
     this.time = time;
-    this.speed = Math.random() * 10;
+    this.speed = Math.random() * 100;
+    this.counter = 0;
   }
   slide.prototype = Object.create(Animator.prototype);
   slide.prototype.step = function (time) {
     if (time > this.time) {
       return false;
     }
-    this.frame.translate(Math.sin(time / 1000) * this.speed, 0);
+    this.frame.translate(Math.cos(this.counter += 0.1) * this.speed, 0);
     return true;
   };
   return slide;
@@ -78,20 +79,34 @@ var Frame = (function () {
   function frame(name) {
     this.style = "rgba(" + (Math.random() * 255 | 0) + "," + (Math.random() * 255 | 0)  + "," + (Math.random() * 255 | 0)  + ", 1)";
     this.children = [];
-    this.transform = Transform.createIdentity();
-    this.inverseTransform = Transform.createIdentity();
+    this.transform = new Matrix();
+    this.inverseTransform = new Matrix();
     this.isTransformDirty = false;
     this.isDirty = false;
+
+    this._x = 0;
+    this._y = 0;
+    this._scaleX = 1;
+    this._scaleY = 1;
+    this._rotation = 0;
+    this.center = new Point();
   }
+
+  frame.prototype.alignCenter = function () {
+    this.center.x = this.w / 2;
+    this.center.y = this.h / 2;
+  };
+
   frame.prototype.addChild = function (frame) {
     this.children.push(frame);
     frame.parent = this;
   };
+
   frame.prototype.render = function (context, ignore) {
+    this._updateTransform();
     context.save();
     var t = this.transform;
-
-    context.transform(t.a, t.b, t.c, t.d, t.e, t.f);
+    context.transform(t.a, t.b, t.c, t.d, t.tx, t.ty);
     context.beginPath();
     context.rect(0, 0, this.w, this.h);
     context.closePath();
@@ -134,6 +149,7 @@ var Frame = (function () {
 
   frame.prototype.visit = function (visitor, transform) {
     var stack, frame, transforms;
+    this._updateTransform();
     if (transform) {
       stack = [this];
       transforms = [transform];
@@ -143,7 +159,7 @@ var Frame = (function () {
         for (var i = frame.children.length - 1; i >= 0; i--) {
           stack.push(frame.children[i]);
           var t = transform.clone();
-          Transform.mul(t, frame.children[i].transform);
+          Matrix.multiply(t, frame.children[i].transform);
           transforms.push(t);
         }
         visitor(frame, transform);
@@ -176,6 +192,7 @@ var Frame = (function () {
         child.translate(x, y);
         child.w = w;
         child.h = w;
+        child.alignCenter();
         parent.addChild(child);
       }
     }
@@ -186,27 +203,33 @@ var Frame = (function () {
 
   frame.prototype._updateTransform = function () {
     if (this.isTransformDirty) {
+      this.transform.identity();
+      this.transform.translate(-this.center.x, -this.center.y);
+      this.transform.rotate(this._rotation);
+      this.transform.translate(this.center.x + this._x, this.center.y + this._y);
+
+      var scale = new Matrix();
+      scale.scale(this.scaleX, this.scaleY);
+      scale.concat(this.transform);
+      this.transform = scale;
+
       this.transform.inverse(this.inverseTransform);
     }
     this.isTransformDirty = false;
   };
 
   frame.prototype.rotate = function (angle) {
-    this.isDirty = true;
-    this.isTransformDirty = true;
-    this.transform.rotate(angle);
-  };
-
-  frame.prototype.translate = function (x, y) {
-    this.isDirty = true;
-    this.isTransformDirty = true;
-    this.transform.translate(x, y);
+    this.rotation += angle;
   };
 
   frame.prototype.scale = function (x, y) {
-    this.isDirty = true;
-    this.isTransformDirty = true;
-    this.transform.scale(x, y);
+    this.scaleX *= x;
+    this.scaleY *= y;
+  };
+
+  frame.prototype.translate = function (x, y) {
+    this.x += x;
+    this.y += y;
   };
 
   frame.createNestedList = function (count, w, h, padding) {
@@ -221,6 +244,8 @@ var Frame = (function () {
       child.translate(x, y);
       child.w = w + (count - i - 1) * 2 * padding;
       child.h = h + (count - i - 1) * 2 * padding;
+      // child.center.x = child.w / 2;
+      // child.center.y = child.h / 2;
       parent.addChild(child);
       parent = child;
     }
@@ -231,23 +256,56 @@ var Frame = (function () {
 
   Object.defineProperty(frame.prototype, "x", {
     get: function () {
-      return this.transform.x;
+      return this._x;
     },
     set: function (x) {
       this.isDirty = true;
       this.isTransformDirty = true;
-      this.transform.x = x;
+      this._x = x;
     }
   });
 
   Object.defineProperty(frame.prototype, "y", {
     get: function () {
-      return this.transform.y;
+      return this._y;
     },
     set: function (y) {
       this.isDirty = true;
       this.isTransformDirty = true;
-      this.transform.y = y;
+      this._y = y;
+    }
+  });
+
+  Object.defineProperty(frame.prototype, "scaleX", {
+    get: function () {
+      return this._scaleX;
+    },
+    set: function (x) {
+      this.isDirty = true;
+      this.isTransformDirty = true;
+      this._scaleX = x;
+    }
+  });
+
+  Object.defineProperty(frame.prototype, "scaleY", {
+    get: function () {
+      return this._scaleY;
+    },
+    set: function (y) {
+      this.isDirty = true;
+      this.isTransformDirty = true;
+      this._scaleY = y;
+    }
+  });
+
+  Object.defineProperty(frame.prototype, "rotation", {
+    get: function () {
+      return this._rotation;
+    },
+    set: function (rotation) {
+      this.isDirty = true;
+      this.isTransformDirty = true;
+      this._rotation = rotation;
     }
   });
 
@@ -272,8 +330,8 @@ var DirtyRegion = (function () {
     this.c = ceil(w / SIZE);
     this.r = ceil(h / SIZE);
     this.grid = [];
-    for (var i = 0; i < this.c; i++) {
-      for (var j = 0; j < this.r; j++) {
+    for (var j = 0; j < this.r; j++) {
+      for (var i = 0; i < this.c; i++) {
         this.grid.push(new Cell(new Rectangle(i * SIZE, j * SIZE, SIZE, SIZE)));
       }
     }
@@ -290,34 +348,47 @@ var DirtyRegion = (function () {
   dirtyRegion.prototype.addDirtyRectangle = function (rectangle) {
     var x = rectangle.x >> SIZE_IN_BITS;
     var y = rectangle.y >> SIZE_IN_BITS;
-    if (x < 0 || x >= this.c || y < 0 || y >= this.r) {
+    if (x >= this.c || y >= this.r) {
       return;
     }
-    var cell = this.grid[x * this.c + y];
+    if (x < 0) {
+      x = 0;
+    }
+    if (y < 0) {
+      y = 0;
+    }
+    var cell = this.grid[y * this.c + x];
     rectangle = rectangle.clone();
     rectangle.snap();
     if (cell.region.contains(rectangle)) {
-      for (var i = 0; i < cell.children.length; i++) {
-        var region = cell.children[i];
-        if (region.contains(rectangle)) {
+      var children = cell.children;
+      for (var i = 0; i < children.length; i++) {
+        var child = children[i];
+        // Check if rectangle is within another dirty rectangle.
+        if (child.contains(rectangle)) {
           return;
         }
-        if (rectangle.contains(region)) {
-          Rectangle.set(region, rectangle);
-          return;
-        }
+//        if (rectangle.contains(child)) {
+//          child.set(rectangle);
+//          return;
+////          for (i = i + 1; i < children.length; i++) {
+////            if (rectangle.contains(children[i])) {
+////              children[i] = null;
+////            }
+////          }
+//        }
       }
-      for (var i = 0; i < cell.children.length; i++) {
-        var child = cell.children[i];
-        Rectangle.set(tmpRectangle, child);
+      for (var i = 0; i < children.length; i++) {
+        var child = children[i];
+        tmpRectangle.set(child);
         tmpRectangle.union(rectangle);
         if (child.intersects(rectangle)) {
-          Rectangle.set(child, tmpRectangle);
+          child.set(tmpRectangle);
           return;
         }
         if (tmpRectangle.area() < 6 * (child.area() + rectangle.area())) {
           // this.addDirtyRectangle(tmpRectangle);
-          Rectangle.set(child, tmpRectangle);
+          child.set(tmpRectangle);
           return;
         }
       }
@@ -327,7 +398,7 @@ var DirtyRegion = (function () {
       var h = Math.min(this.r, ceil((rectangle.y + rectangle.h) / SIZE)) - y;
       for (var i = 0; i < w; i++) {
         for (var j = 0; j < h; j++) {
-          var cell = this.grid[(x + i) * this.c + (y + j)];
+          var cell = this.grid[(y + j) * this.c + (x + i)];
           var intersection = cell.region.clone();
           intersection.intersect(rectangle);
           if (!intersection.isEmpty()) {
@@ -339,100 +410,25 @@ var DirtyRegion = (function () {
     }
   };
 
-  dirtyRegion.prototype.addDirtyRectangle4 = function (rectangle) {
-    var x = clamp(rectangle.x / this.cw | 0, 0, SIZE - 1);
-    var y = clamp(rectangle.y / this.ch | 0, 0, SIZE - 1);
-
-    var x1 = clamp(1 + (rectangle.x + rectangle.w) / this.cw | 0, 0, SIZE - 1);
-    var y1 = clamp(1 + (rectangle.y + rectangle.h) / this.ch | 0, 0, SIZE- 1);
-
-    var clone = null;
-    var item = Rectangle.createEmpty();
-    for (var i = x; i <= x1; i++) {
-      for (var j = y; j <= y1; j++) {
-        var cell = this.grid[i][j];
-        var isContained = false;
-        var isMerged = false;
-        for (var k = 0; k < cell.length; k++) {
-          Rectangle.set(item, cell[k]);
-          if (item.contains(rectangle)) {
-            isContained = true;
-            break;
-          }
-          item.union(rectangle);
-          if (item.area() < 10 * (cell[k].area() + rectangle.area())) {
-            isMerged = true;
-            cell[k].union(rectangle);
-            break;
-          }
-        }
-        if (isMerged) {
-          continue;
-        }
-        if (!isContained) {
-          clone = clone || rectangle.clone();
-          cell.push(clone);
-        }
-      }
-    }
-  };
-
-  dirtyRegion.prototype.addDirtyRectangle4 = function (rectangle) {
-    var x = clamp(rectangle.x / this.cw | 0, 0, COLUMNS - 1);
-    var y = clamp(rectangle.y / this.ch | 0, 0, ROWS - 1);
-
-    var x1 = clamp(1 + (rectangle.x + rectangle.w) / this.cw | 0, 0, COLUMNS - 1);
-    var y1 = clamp(1 + (rectangle.y + rectangle.h) / this.ch | 0, 0, ROWS - 1);
-
-    var clone = null;
-    var item = Rectangle.createEmpty();
-    for (var i = x; i <= x1; i++) {
-      for (var j = y; j <= y1; j++) {
-        var cell = this.grid[i][j];
-        var isContained = false;
-        var isMerged = false;
-        for (var k = 0; k < cell.length; k++) {
-          Rectangle.set(item, cell[k]);
-          if (item.contains(rectangle)) {
-            isContained = true;
-            break;
-          }
-          item.union(rectangle);
-          if (item.area() < 10 * (cell[k].area() + rectangle.area())) {
-            isMerged = true;
-            cell[k].union(rectangle);
-            break;
-          }
-        }
-        if (isMerged) {
-          continue;
-        }
-        if (!isContained) {
-          clone = clone || rectangle.clone();
-          cell.push(clone);
-        }
-      }
-    }
-  };
-
   dirtyRegion.prototype.render = function (context) {
-
-    context.strokeStyle = "white";
-    for (var i = 0; i < this.c; i++) {
-      for (var j = 0; j < this.r; j++) {
-        var cell = this.grid[i * this.c + j];
-//        context.beginPath();
-//        drawRectangle(context, cell.region);
-//        context.closePath();
-//        context.stroke();
-//        context.fillText(cell.children.length, cell.region.x + 3, cell.region.y + 12);
+    if (true) {
+      context.strokeStyle = "white";
+      for (var i = 0; i < this.c; i++) {
+        for (var j = 0; j < this.r; j++) {
+          var cell = this.grid[j * this.c + i];
+          context.beginPath();
+          drawRectangle(context, cell.region);
+          context.closePath();
+          context.stroke();
+          context.fillText(cell.children.length, cell.region.x + 3, cell.region.y + 12);
+        }
       }
     }
 
     context.strokeStyle = "black";
     for (var i = 0; i < this.c; i++) {
       for (var j = 0; j < this.r; j++) {
-        var cell = this.grid[i * this.c + j];
+        var cell = this.grid[j * this.c + i];
         var children = cell.children;
         for (var k = 0; k < children.length; k++) {
           var rectangle = children[k];
@@ -444,43 +440,8 @@ var DirtyRegion = (function () {
       }
     }
 
-
-//    for (var i = 0; i < COLUMNS; i++) {
-//      for (var j = 0; j < ROWS; j++) {
-////    for (var i = 0; i < 3; i++) {
-////      for (var j = 0; j < 3; j++) {
-//        var cell = this.grid[i][j];
-//        for (var k = 0; k < cell.length; k++) {
-//          var rectangle = cell[k];
-//          context.beginPath();
-//          context.rect(rectangle.x, rectangle.y, rectangle.w, rectangle.h);
-//          context.closePath();
-//          context.stroke();
-//        }
-//      }
-//    }
   };
 
-  dirtyRegion.prototype.addDirtyRectangle2 = function (rectangle) {
-    var tmp = Rectangle.createEmpty();
-    for (var i = 0; i < this.rectangles.length; i++) {
-      var dirty = this.rectangles[i];
-      Rectangle.set(tmp, dirty);
-      tmp.union(rectangle);
-      if ((tmp.area() / (dirty.area() + rectangle.area())) < 100) {
-        Rectangle.set(dirty, tmp);
-        return;
-      }
-    }
-
-    for (var i = 0; i < this.rectangles.length; i++) {
-      if (this.rectangles[i].contains(rectangle)) {
-        return;
-      }
-    }
-
-    this.rectangles.push(rectangle.clone());
-  };
   return dirtyRegion;
 })();
 
@@ -500,20 +461,19 @@ var Scene = (function () {
 
     var rectangle = Rectangle.createEmpty();
 
-    fps.enter("DIRTY");
+    timeline.enter("DIRTY");
     var s = performance.now();
     for (var i = 0; i < 1; i++) {
       dirtyRegion.clear();
       this.root.visit(function (frame, transform) {
         if (frame.isDirty) {
-          rectangle.set(0, 0, frame.w, frame.h);
+          rectangle.setElements(0, 0, frame.w, frame.h);
           transform.transformRectangleAABB(rectangle);
           dirtyRegion.addDirtyRectangle(rectangle);
         }
       }, this.root.transform);
     }
-    console.info("TODO: " + (performance.now() - s).toFixed(3));
-    fps.leave("DIRTY");
+    timeline.leave("DIRTY");
 
     dirtyRegion.render(context);
 
@@ -533,13 +493,14 @@ var Scene = (function () {
   scene.create = function (w, h) {
     var s = new Scene(w, h);
     s.root = new Frame("");
-    s.root.w = w;
-    s.root.h = h;
+    s.root.w = s.w;
+    s.root.h = s.h;
+    s.root.alignCenter();
     var count = 64;
     var frames = [s.root];
 
     for (var i = 0; i < 0; i++) {
-      var child = Frame.createNestedList(128, 2, 2, 2);
+      var child = Frame.createNestedList(32, 4, 4, 4);
       var parent = frames[0];
       child.translate (
         Math.random() * (parent.w - child.w),
@@ -547,32 +508,33 @@ var Scene = (function () {
       );
       parent.addChild(child);
       frames.push(child);
-      s.animators.push(new Storm(s.root, 10));
+      s.animators.push(new Storm(s.root, 100, Math.random() / 1));
     }
 
     var parent = frames[0];
-//    var child = Frame.createGrid(32, 32, 8, 8, 8);
-//    child.translate(100, 100);
-//    parent.addChild(child);
-    s.animators.push(new Storm(s.root, 500, Math.random() / 2));
-    s.animators.push(new Cross(s.root));
+    for (var i = 0; i < 0; i++) {
+      var child = Frame.createGrid(16, 16, 8, 8, 8);
+      child.alignCenter();
+      child.translate(Math.random() * (parent.w - child.w), Math.random() * (parent.w - child.w));
+      parent.addChild(child);
+    }
+    s.animators.push(new Storm(s.root, 1000, Math.random() / 10, 4));
+    // s.animators.push(new Cross(s.root));
+
+    /*
+    for (var i = 0; i < 1; i++) {
+      var k = new Storm(s.root, 3, Math.random() / 100, 200);
+      s.animators.push(k);
+      for (var j = 0; j < k.flakes.length; j++) {
+        var f = new Storm(k.flakes[j], 1000, 0.1, 2);
+        s.animators.push(f);
+      }
+    }
+    */
 
     return s;
   };
   return scene;
-})();
-
-var Flake = (function () {
-  function flake(radius, density) {
-    Frame.call(this);
-    this.radius = radius;
-    this.density = density;
-    this.w = this.h = 2 + Math.random() * 10;
-//    this.w = Math.random() * 100;
-//    this.h = Math.random() * 100;
-  }
-  flake.prototype = Object.create(Frame.prototype);
-  return flake;
 })();
 
 var Cross = (function () {
@@ -603,47 +565,8 @@ var Cross = (function () {
 
   storm.prototype.step = function () {
     this.angle += 0.0001;
-    this.v.rotate(0.002);
-    this.h.rotate(0.002);
-  };
-
-  return storm;
-})();
-
-var Storm = (function () {
-  function storm(parent, count, speed) {
-    this.parent = parent;
-    this.speed = speed;
-    this.angle = 0;
-    this.flakes = [];
-    for(var i = 0; i < count; i++) {
-      var flake = new Flake(Math.random() * 4 + 1, Math.random() * count);
-      flake.translate(Math.random() * this.parent.w, Math.random() * this.parent.h);
-      this.flakes.push(flake);
-      this.parent.addChild(flake);
-    }
-  }
-
-  storm.prototype.step = function (time) {
-    this.angle += 0.01;
-    for(var i = 0; i < this.flakes.length; i++) {
-      var flake = this.flakes[i];
-      flake.y += this.speed * (Math.cos(this.angle + flake.density) + 1 + flake.radius / 2);
-      flake.x += this.speed * (Math.sin(this.angle) * 2);
-      if (flake.x > this.parent.w + 5 || flake.x < -5 || flake.y > this.parent.h) {
-        if (i % 3 > 0){
-          flake.x = Math.random() * this.parent.w;
-          flake.y = -10;
-        } else {
-          if (Math.sin(this.angle) > 0) {
-            flake.x = -5;
-          } else {
-            flake.x = this.parent.w + 5;
-          }
-          flake.y = Math.random() * this.parent.h;
-        }
-      }
-    }
+    // this.v.rotate(0.002);
+    // this.h.rotate(0.002);
   };
 
   return storm;

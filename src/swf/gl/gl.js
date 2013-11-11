@@ -3,13 +3,22 @@
 
   var Point = (function () {
     function point (x, y) {
-      this.x = x;
-      this.y = y;
+      if (arguments.length === 0) {
+        this.x = 0;
+        this.y = 0;
+      } else {
+        this.x = x;
+        this.y = y;
+      }
     }
     point.prototype.set = function (x, y) {
       this.x = x;
       this.y = y;
     };
+    point.prototype.toString = function () {
+      return "{ x: " + this.x + ", y: " + this.y + "}";
+    };
+
     return point;
   })();
 
@@ -21,11 +30,18 @@
       this.h = h;
     }
 
-    rectangle.prototype.set = function (x, y, w, h) {
+    rectangle.prototype.setElements = function (x, y, w, h) {
       this.x = x;
       this.y = y;
       this.w = w;
       this.h = h;
+    };
+
+    rectangle.prototype.set = function (other) {
+      this.x = other.x;
+      this.y = other.y;
+      this.w = other.w;
+      this.h = other.h;
     };
 
     rectangle.prototype.contains = function (rect) {
@@ -80,7 +96,7 @@
       if (result.w <= 0 || result.h <= 0) {
         result.empty();
       }
-      Rectangle.set(this, result);
+      this.set(result);
       return result;
     };
 
@@ -143,102 +159,71 @@
       return new rectangle(0, 0, 0, 0);
     };
 
-    rectangle.set = function (dst, src) {
-      dst.x = src.x;
-      dst.y = src.y;
-      dst.w = src.w;
-      dst.h = src.h;
-    };
-
     return rectangle;
   })();
 
-  var Transform = (function () {
-    function transform(m11, m12, m21, m22, dx, dy) {
-      this.a = m11;
-      this.b = m12;
-      this.c = m21;
-      this.d = m22;
-      this.e = dx;
-      this.f = dy;
+  var Matrix = (function () {
+    function matrix(a, b, c, d, tx, ty) {
+      if (arguments.length === 0) {
+        this.setElements(1, 0, 0, 1, 0, 0);
+      } else {
+        this.setElements(a, b, c, d, tx, ty);
+      }
     }
 
-    transform.prototype.set = function (m11, m12, m21, m22, dx, dy) {
-      this.a = m11;
-      this.b = m12;
-      this.c = m21;
-      this.d = m22;
-      this.e = dx;
-      this.f = dy;
+    matrix.prototype.setElements = function (a, b, c, d, tx, ty) {
+      this.a = a;
+      this.b = b;
+      this.c = c;
+      this.d = d;
+      this.tx = tx;
+      this.ty = ty;
     };
 
-    transform.prototype.clone = function() {
-      return new transform(this.a, this.b, this.c, this.d, this.e, this.f);
+    matrix.prototype.set = function (other) {
+      this.a = other.a;
+      this.b = other.b;
+      this.c = other.c;
+      this.d = other.d;
+      this.tx = other.tx;
+      this.ty = other.ty;
     };
 
-    transform.prototype.transform = function(m11, m12, m21, m22, dx, dy) {
-      var a = this.a, b = this.b, c = this.c, d = this.d, e = this.e, f = this.f;
-      this.a = a * m11 + c * m12;
-      this.b = b * m11 + d * m12;
-      this.c = a * m21 + c * m22;
-      this.d = b * m21 + d * m22;
-      this.e = a *  dx + c * dy + e;
-      this.f = b *  dx + d * dy + f;
+    matrix.prototype.clone = function() {
+      return new matrix(this.a, this.b, this.c, this.d, this.tx, this.ty);
     };
 
-    transform.prototype.transformRectangleAABB = function(rectangle) {
+    matrix.prototype.transform = function(a, b, c, d, tx, ty) {
+      var _a = this.a, _b = this.b, _c = this.c, _d = this.d, _tx = this.tx, _ty = this.ty;
+      this.a =  _a * a + _c * b;
+      this.b =  _b * a + _d * b;
+      this.c =  _a * c + _c * d;
+      this.d =  _b * c + _d * d;
+      this.tx = _a * tx + _c * ty + _tx;
+      this.ty = _b * tx + _d * ty + _ty;
+    };
+
+    matrix.prototype.transformRectangleAABB = function(rectangle) {
       var a = this.a;
       var b = this.b;
       var c = this.c;
       var d = this.d;
-      var e = this.e;
-      var f = this.f;
+      var tx = this.tx;
+      var ty = this.ty;
 
       var x = rectangle.x;
       var y = rectangle.y;
       var w = rectangle.w;
       var h = rectangle.h;
 
-      var x0 = a * x + c * y + e;
-      var y0 = b * x + d * y + f;
-
-      var x1 = a * (x + w) + c * y + e;
-      var y1 = b * (x + w) + d * y + f;
-
-      var x2 = a * (x + w) + c * (y + h) + e;
-      var y2 = b * (x + w) + d * (y + h) + f;
-
-      var x3 = a * x + c * (y + h) + e;
-      var y3 = b * x + d * (y + h) + f;
-
-      rectangle.x = Math.min(x0, x1, x2, x3);
-      rectangle.w = Math.max(x0, x1, x2, x3) - rectangle.x;
-
-      rectangle.y = Math.min(y0, y1, y2, y3);
-      rectangle.h = Math.max(y0, y1, y2, y3) - rectangle.y;
-    };
-
-    transform.prototype.transformRectangleAABB = function(rectangle) {
-      var a = this.a;
-      var b = this.b;
-      var c = this.c;
-      var d = this.d;
-      var e = this.e;
-      var f = this.f;
-
-      var x = rectangle.x;
-      var y = rectangle.y;
-      var w = rectangle.w;
-      var h = rectangle.h;
-
-      var x0 =  + c * y + e;
-      var y0 = b * x + d * y + f;
-      var x1 = a * (x + w) + c * y + e;
-      var y1 = b * (x + w) + d * y + f;
-      var x2 = a * (x + w) + c * (y + h) + e;
-      var y2 = b * (x + w) + d * (y + h) + f;
-      var x3 = a * x + c * (y + h) + e;
-      var y3 = b * x + d * (y + h) + f;
+      var x0 = a + c * y + tx;
+      var y0 = b * x + d * y + ty;
+      var x1 = a * (x + w) + c * y + tx;
+      var y1 = b * (x + w) + d * y + ty;
+      var x2 = a * (x + w) + c * (y + h) + tx;
+      var y2 = b * (x + w) + d * (y + h) + ty;
+      var x3 = a * x + c * (y + h) + tx;
+      var y3 = b * x + d * (y + h) + ty;
 
       var tmp = 0;
 
@@ -258,53 +243,87 @@
       rectangle.h = (y1 > y3 ? y1 : y3) - rectangle.y;
     };
 
-    transform.prototype.scale = function(x, y) {
+    matrix.prototype.scale = function(x, y) {
       this.a *= x;
-      this.b *= x;
-      this.c *= y;
+      this.b *= y;
+      this.c *= x;
       this.d *= y;
+      this.tx *= x;
+      this.ty *= y;
     };
 
-    transform.prototype.rotate = function (angle) {
-      var a = this.a, b = this.b, c = this.c, d = this.d, e = this.e, f = this.f;
+    matrix.prototype.rotate = function (angle) {
+      var a = this.a, b = this.b, c = this.c, d = this.d, tx = this.tx, ty = this.ty;
       var u = Math.cos(angle);
       var v = Math.sin(angle);
-      this.a = a * u + c * v;
-      this.b = b * u + d * v;
-      this.c = a * -v + c * u;
-      this.d = b * -v + d * u;
-      this.e = e;
-      this.f = f;
+      this.a =   a *  u +  c * v;
+      this.b =   b *  u +  d * v;
+      this.c =   a * -v +  c * u;
+      this.d =   b * -v +  d * u;
+      this.tx = tx *  u - ty * v;
+      this.ty = tx *  v + ty * u;
     };
 
-    transform.prototype.translate = function(x, y) {
-      this.e = this.a * x + this.c * y + this.e;
-      this.f = this.b * x + this.d * y + this.f;
+    matrix.prototype.concat = function (other) {
+      var a = this.a * other.a;
+      var b = 0.0;
+      var c = 0.0;
+      var d = this.d * other.d;
+      var tx = this.tx * other.a + other.tx;
+      var ty = this.ty * other.d + other.ty;
+
+      if (this.b !== 0.0 || this.c !== 0.0 || other.b !== 0.0 || other.c !== 0.0) {
+        a  += this.b * other.c;
+        d  += this.c * other.b;
+        b  += this.a * other.b + this.b * other.d;
+        c  += this.c * other.a + this.d * other.c;
+        tx += this.ty * other.c;
+        ty += this.tx * other.b;
+      }
+
+      this.a  = a;
+      this.b  = b;
+      this.c  = c;
+      this.d  = d;
+      this.tx = tx;
+      this.ty = ty;
     };
 
-    transform.prototype.reset = function () {
+    matrix.prototype.translate = function(x, y) {
+      this.tx += x;
+      this.ty += y;
+    };
+
+    matrix.prototype.identity = function () {
       this.a = 1;
       this.b = 0;
       this.c = 0;
       this.d = 1;
-      this.e = 0;
-      this.f = 0;
+      this.tx = 0;
+      this.ty = 0;
     };
 
-    transform.prototype.transformPoint = function (point) {
+    matrix.prototype.transformPoint = function (point) {
       var x = point.x;
       var y = point.y;
-      point.x = this.a * x + this.c * y + this.e;
-      point.y = this.b * x + this.d * y + this.f;
+      point.x = this.a * x + this.c * y + this.tx;
+      point.y = this.b * x + this.d * y + this.ty;
     };
 
-    transform.prototype.inverse = function (result) {
+    matrix.prototype.deltaTransformPoint = function (point) {
+      var x = point.x;
+      var y = point.y;
+      point.x = this.a * x + this.c * y;
+      point.y = this.b * x + this.d * y;
+    };
+
+    matrix.prototype.inverse = function (result) {
       var m11 = this.a;
       var m12 = this.b;
       var m21 = this.c;
       var m22 = this.d;
-      var dx  = this.e;
-      var dy  = this.f;
+      var dx  = this.tx;
+      var dy  = this.ty;
       if (m12 === 0.0 && m21 === 0.0) {
         m11 = 1.0 / m11;
         m22 = 1.0 / m22;
@@ -331,56 +350,30 @@
       result.b = m12;
       result.c = m21;
       result.d = m22;
-      result.e = dx;
-      result.f = dy;
+      result.tx = dx;
+      result.ty = dy;
     };
 
-    Object.defineProperty(transform.prototype, "x", {
-      get: function () {
-        return this.e;
-      },
-      set: function (x) {
-        this.e = x;
-      }
-    });
-
-    Object.defineProperty(transform.prototype, "y", {
-      get: function () {
-        return this.f;
-      },
-      set: function (y) {
-        this.f = y;
-      }
-    });
-
-    transform.prototype.toString = function () {
+    matrix.prototype.toString = function () {
       return "{" +
         this.a + ", " +
         this.b + ", " +
         this.c + ", " +
         this.d + ", " +
-        this.e + ", " +
-        this.f +
+        this.tx + ", " +
+        this.ty +
       "}";
     };
-    transform.createIdentity = function () {
-      return new transform(1, 0, 0, 1, 0, 0);
+
+    matrix.createIdentity = function () {
+      return new matrix(1, 0, 0, 1, 0, 0);
     };
 
-    transform.set = function (dst, src) {
-      dst.a = src.a;
-      dst.b = src.b;
-      dst.c = src.c;
-      dst.d = src.d;
-      dst.e = src.e;
-      dst.f = src.f;
+    matrix.multiply = function (dst, src) {
+      dst.transform(src.a, src.b, src.c, src.d, src.tx, src.ty);
     };
 
-    transform.mul = function (dst, src) {
-      dst.transform(src.a, src.b, src.c, src.d, src.e, src.f);
-    };
-
-    return transform;
+    return matrix;
   })();
 
   function matrixTranspose(r, c, m) {
@@ -415,8 +408,8 @@
     var b = transform.b;
     var c = transform.c;
     var d = transform.d;
-    var e = transform.e;
-    var f = transform.f;
+    var e = transform.tx;
+    var f = transform.ty;
     return new Float32Array([
       a, b, 0, c, d, 0, e, f, 1
     ]);
@@ -923,7 +916,7 @@
 
   exports.Point = Point;
   exports.Rectangle = Rectangle;
-  exports.Transform = Transform;
+  exports.Matrix = Matrix;
   exports.Path = Path;
   exports.SimplePath = SimplePath;
   exports.Geometry = Geometry;
