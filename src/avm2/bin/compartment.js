@@ -67,8 +67,12 @@ load(homePath + "src/avm2/disassembler.js");
 load(homePath + "src/avm2/analyze.js");
 
 Timer.start("Loading Compiler");
+Timer.start("Loading estransform");
 load(homePath + "src/avm2/compiler/lljs/src/estransform.js");
+Timer.stop();
+Timer.start("Loading escodegen");
 load(homePath + "src/avm2/compiler/lljs/src/escodegen.js");
+Timer.stop();
 load(homePath + "src/avm2/compiler/inferrer.js");
 load(homePath + "src/avm2/compiler/c4/ir.js");
 load(homePath + "src/avm2/compiler/c4/looper.js");

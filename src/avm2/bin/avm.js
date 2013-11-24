@@ -69,6 +69,7 @@ var alwaysInterpret = shellOptions.register(new Option("i", "alwaysInterpret", "
 var help = shellOptions.register(new Option("h", "help", "boolean", false, "prints help"));
 var traceMetrics = shellOptions.register(new Option("tm", "traceMetrics", "boolean", false, "prints collected metrics"));
 var releaseMode = shellOptions.register(new Option("rel", "release", "boolean", false, "run in release mode (!release is the default)"));
+var aot = shellOptions.register(new Option("aot", "aot", "boolean", false, "compile entire script"));
 
 load(homePath + "src/avm2/metrics.js");
 load(homePath + "src/avm2/domain.js")
@@ -223,6 +224,7 @@ var securityDomains = [];
 function runVM() {
   var securityDomain = new SecurityDomain();
   var compartment = securityDomain.compartment;
+  compartment.Counter.setEnabled(traceMetrics.value);
   var argumentParser = new compartment.ArgumentParser();
   argumentParser.addBoundOptionSet(compartment.systemOptions);
   argumentParser.parse(originalArgs.slice(0));
@@ -232,14 +234,22 @@ function runVM() {
   runAbcs(securityDomain, abcFiles.map(function (abcFile) {
     return securityDomain.compartment.grabAbc(abcFile);
   }));
+  if (traceMetrics.value) {
+    compartment.Counter.trace(new IndentingWriter());
+    compartment.Timer.trace(new IndentingWriter());
+  }
 }
 
 function runAbcs(securityDomain, abcs) {
   for (var i = 0; i < abcs.length; i++) {
-    if (i < files.lenth - 1) {
-      securityDomain.applicationDomain.loadAbc(abcs[i]);
+    if (aot.value) {
+      securityDomain.applicationDomain.compileAbc(abcs[i]);
     } else {
-      securityDomain.applicationDomain.executeAbc(abcs[i]);
+      if (i < files.lenth - 1) {
+        securityDomain.applicationDomain.loadAbc(abcs[i]);
+      } else {
+        securityDomain.applicationDomain.executeAbc(abcs[i]);
+      }
     }
   }
 }
