@@ -4,6 +4,7 @@
   <title></title>
 </head>
 <body style="background-color: #333333;">
+<link href='http://fonts.googleapis.com/css?family=Open+Sans' rel='stylesheet' type='text/css'>
   <script src="tween.js"></script>
   <script src="shapes.js"></script>
   <script src="../../src/avm2/options.js"></script>
@@ -28,6 +29,7 @@
     var Stage = Shumway.Layers.Stage;
     var Snow = Shumway.Layers.Elements.Snow;
     var Bitmap = Shumway.Layers.Elements.Bitmap;
+    var Text = Shumway.Layers.Elements.Text;
     var Shape = Shumway.Layers.Elements.Shape;
     var Slider = Shumway.Layers.Elements.Slider;
   </script>
@@ -59,7 +61,8 @@
   </div>
 
   <div style="clear: both;">
-    <canvas id="stageCanvas" width="1024" height="1024" style="background-color: #1F1F21;"></canvas>
+    <canvas id="stageCanvas" width="1024" height="512" style="background-color: #1F1F21;"></canvas>
+    <!--<canvas id="stageCanvas" width="1024" height="1024" style="background-color: #1F1F21;"></canvas>-->
     <!--<canvas id="stageCanvas" width="1024" height="1024" style="background-color: white;"></canvas>-->
   </div>
   <div id="debugInfoContainer">
@@ -69,21 +72,25 @@
   <script>
     function shuffle(target) {
       var tween = new TWEEN.Tween(target);
-      tween.easing(TWEEN.Easing.Exponential.Out);
+      tween.easing(TWEEN.Easing.Exponential.InOut);
       function next() {
-        var w = 256, h = 256;
+        var w = 128, h = 128;
         var x = Math.max(0, Math.random() * (canvas.width - w));
         var y = Math.max(0, Math.random() * (canvas.height - h));
         var s = 0.25 + Math.random() * 1;
+        var s = 1;
         tween.easing(TWEEN.Easing.Exponential.Out);
-        tween.delay(Math.random() * 5000);
+        tween.delay(Math.random() * options.movement * 1000);
         tween.to({
           x: x,
           y: y,
           scaleX: s,
-          scaleY: s,
-          rotation: (Math.random() - 0.5) * 90
+          scaleY: s
+          // rotation: (Math.random() - 0.5) * 90
         }, 2000).start();
+        if (Math.random() < 0.1) {
+          tween.stop();
+        }
       }
       next();
       tween.onComplete(next);
@@ -130,7 +137,7 @@
 
     var timeline = new Timeline(document.getElementById("frameTimeline"));
     timeline.setFrameRate(60);
-    timeline.refreshEvery(10);
+    timeline.refreshEvery(60);
 
     var canvas = document.getElementById("stageCanvas");
     var context = canvas.getContext("2d");
@@ -142,11 +149,12 @@
     var options = {
       flakes: 1,
       shapes: 0,
-      bitmaps: 0,
-      scale: 1,
-      select: 0,
+      bitmaps: 1,
+      text: 1,
+      movement: 20,
       render: true,
-      renderDirtyRegions: false,
+      drawDirtyRegions: false,
+      drawLayers: false,
       clear: false,
       cacheAsBitmap: false
     };
@@ -156,13 +164,6 @@
       gui.add(options, k);
     }
 
-    var obj = {
-      add: function() {
-        console.log("clicked")
-      }
-    };
-
-    gui.add(obj,'add');
 
     function getColor(fill) {
       var rgb = fill.color;
@@ -179,17 +180,18 @@
     var KEY_Z = 90;
 
     var stage = new Stage(canvas.width, canvas.height);
+    var animators = [];
+//    var snow = new Snow(options.flakes, 32, canvas.width, canvas.height);
+//    animators.push(snow);
+//    stage.addChild(snow);
 
-    var snow = new Snow(options.flakes, 32, canvas.width, canvas.height);
-    var animators = [snow];
-    stage.addChild(snow);
 
-    for (var i = 0; i < options.bitmaps; i++) {
-      var bitmap = new Bitmap("../filter/firefox.png");
-      bitmap.x = (Math.random() - 0.5) * 10000;
-      bitmap.y = (Math.random() - 0.5) * 10000;
-      stage.addChild(bitmap);
-      shuffle(bitmap);
+    for (var i = 0; i < options.text; i++) {
+      var shape = new Text(randomText(), 256);
+      shape.x = (Math.random() - 0.5) * 10000;
+      shape.y = (Math.random() - 0.5) * 10000;
+      stage.addChild(shape);
+      shuffle(shape);
     }
 
     for (var i = 0; i < options.shapes; i++) {
@@ -200,8 +202,15 @@
       shuffle(shape);
     }
 
-    var mousePosition;
+    for (var i = 0; i < options.bitmaps; i++) {
+      var bitmap = new Bitmap("../filter/firefox.png");
+      bitmap.x = (Math.random() - 0.5) * 10000;
+      bitmap.y = (Math.random() - 0.5) * 10000;
+      stage.addChild(bitmap);
+      shuffle(bitmap);
+    }
 
+    var mousePosition;
 
     var frames = 0;
     (function tick() {
@@ -209,11 +218,11 @@
       timeline.enter("FRAME");
       var now = performance.now();
       if (mousePosition) {
-        timeline.enter("SELECT");
+//        timeline.enter("SELECT");
         for (var i = 0; i < options.select; i++) {
           stage.select(mousePosition.x, mousePosition.y);
         }
-        timeline.leave("SELECT");
+//        timeline.leave("SELECT");
       }
 
       animators.forEach(function (animator) {
@@ -226,8 +235,8 @@
           context.fillStyle = "#1F1F21";
           context.fillRect(0, 0, stage.w, stage.h);
         }
-        stage.render(context);
-        if (options.renderDirtyRegions) {
+        stage.render(context, {drawLayers: options.drawLayers});
+        if (options.drawDirtyRegions) {
           stage.dirtyRegion.render(context, {
             drawGrid: false
           });
@@ -236,7 +245,7 @@
       }
 
       timeline.leave("FRAME");
-      console.info("Dirty Ratio: " + stage.dirtyRegion.getDirtyRatio().toFixed(2));
+      // console.info("Dirty Ratio: " + stage.dirtyRegion.getDirtyRatio().toFixed(2));
       stage.dirtyRegion.clear();
       if (frames ++ < 10000) {
         requestAnimationFrame(tick);
@@ -366,6 +375,7 @@
       }, "Min 4 Fast", 1024);
     }
 
+    /*
     gui.add({
       microBenchmarks: microBenchmarks
     }, 'microBenchmarks').name("Benchmark");
@@ -381,6 +391,7 @@
         }, "Select Every Pixel", 1);
       }
     }, 'select').name("Select");
+    */
 
   </script>
 </body>
