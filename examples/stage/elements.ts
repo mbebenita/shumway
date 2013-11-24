@@ -1,5 +1,7 @@
 /// <reference path='all.ts'/>
 import Frame = Shumway.Layers.Frame;
+import FrameContainer = Shumway.Layers.FrameContainer;
+
 module Shumway.Layers.Elements {
 
   class Flake extends Frame {
@@ -15,7 +17,7 @@ module Shumway.Layers.Elements {
     }
   }
 
-  export class Snow extends Frame implements IAnimator {
+  export class Snow extends FrameContainer implements IAnimator {
     private angle : number;
     private speed : number;
     constructor(count : number, radius : number, w : number, h : number) {
@@ -102,6 +104,44 @@ module Shumway.Layers.Elements {
       var t = this.transform;
       context.transform(t.a, t.b, t.c, t.d, t.tx, t.ty);
       context.drawImage(this.image, 0, 0);
+      context.restore();
+    }
+  }
+
+  export class Text extends Frame implements Shumway.IRenderable {
+    text : string;
+    constructor (text : string, w : number) {
+      super();
+      this.text = text;
+      this.w = w;
+    }
+    render (context : CanvasRenderingContext2D) {
+      context.save();
+      var t = this.transform;
+      context.transform(t.a, t.b, t.c, t.d, t.tx, t.ty);
+      context.font = "8pt Open Sans";
+
+      var words = this.text.split(" ");
+      var lines = [];
+      var run = 0;
+      var line = [];
+      var spaceLength = context.measureText(" ").width;
+      for (var i = 0; i < words.length; i++) {
+        var wordLength = context.measureText(words[i]).width;
+        if (run + wordLength > this.w) {
+          lines.push(line);
+          line = [];
+          run = 0;
+        } else {
+          line.push(words[i]);
+          run += wordLength + spaceLength;
+        }
+      }
+      context.fillStyle = "#34aadc";
+      for (var i = 0; i < lines.length; i++) {
+        context.fillText(lines[i].join(" "), 0, 10 + i * 12);
+      }
+      this.h = lines.length * 12;
       context.restore();
     }
   }
