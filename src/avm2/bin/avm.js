@@ -68,6 +68,7 @@ var execute = shellOptions.register(new Option("x", "execute", "boolean", false,
 var alwaysInterpret = shellOptions.register(new Option("i", "alwaysInterpret", "boolean", false, "always interpret"));
 var help = shellOptions.register(new Option("h", "help", "boolean", false, "prints help"));
 var traceMetrics = shellOptions.register(new Option("tm", "traceMetrics", "boolean", false, "prints collected metrics"));
+var traceMetricsJSON = shellOptions.register(new Option("tj", "traceMetricsJSON", "boolean", false, "prints collected metrics"));
 var releaseMode = shellOptions.register(new Option("rel", "release", "boolean", false, "run in release mode (!release is the default)"));
 var aot = shellOptions.register(new Option("aot", "aot", "boolean", false, "compile entire script"));
 
@@ -235,8 +236,8 @@ function runVM() {
     return securityDomain.compartment.grabAbc(abcFile);
   }));
   if (traceMetrics.value) {
-    compartment.Counter.trace(new IndentingWriter());
-    compartment.Timer.trace(new IndentingWriter());
+    compartment.Counter.trace(new IndentingWriter(), traceMetricsJSON.value);
+    compartment.Timer.trace(new IndentingWriter(), traceMetricsJSON.value);
   }
 }
 

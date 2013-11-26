@@ -19,7 +19,6 @@
 var c4Options = systemOptions.register(new OptionSet("C4 Options"));
 var enableC4 = c4Options.register(new Option("c4", "c4", "boolean", false, "Enable the C4 compiler."));
 var c4TraceLevel = c4Options.register(new Option("tc4", "tc4", "number", 0, "Compiler Trace Level"));
-var enableRegisterAllocator = c4Options.register(new Option("ra", "ra", "boolean", false, "Enable register allocator."));
 
 /**
  * Helper functions used by the compiler.
@@ -227,7 +226,9 @@ var createName = function createName(namespaces, name) {
   }
 
   function info(message) {
-    console.info(message);
+    if (traceLevel.value > 0) {
+      console.info(message);
+    }
   }
 
   function unary(operator, argument) {
@@ -1423,7 +1424,7 @@ var createName = function createName(namespaces, name) {
               push(call(callee, null, [constant(classes[bc.index]), pop(), topScope()]));
               break;
             default:
-              unexpected("Not Implemented: " + bc);
+              release || unexpected("Not Implemented: " + bc);
           }
 
           if (op === OP_debug || op === OP_debugfile || op === OP_debugline) {
@@ -1516,16 +1517,18 @@ var createName = function createName(namespaces, name) {
 
     traceIR && cfg.trace(writer);
 
-    Timer.start("Verify IR");
-    cfg.verify();
-    Timer.stop();
+    if (!release) {
+      Timer.start("Verify IR");
+      cfg.verify();
+      Timer.stop();
+    }
 
     Timer.start("Allocate Variables");
     cfg.allocateVariables();
     Timer.stop();
 
     Timer.start("Generate Source");
-    var result = Backend.generate(cfg, enableRegisterAllocator.value);
+    var result = Backend.generate(cfg);
     Timer.stop();
     traceSource && writer.writeLn(result.body);
     Node.stopNumbering();

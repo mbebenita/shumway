@@ -60,7 +60,6 @@ updateAVM2State();
 function updateAVM2State() {
   enableC4.value = true;
   enableVerifier.value = state.verifier;
-  enableRegisterAllocator.value = state.allocator;
   traceExecution.value = state.trace ? 2 : 0;
   traceRenderer.value = state.trace ? 2 : 0;
   disablePreVisitor.value = state.pre ? false : true;
