@@ -1,5 +1,6 @@
 /// <reference path='all.ts'/>
 module Shumway.Geometry {
+
   export class Point {
     x: number;
     y: number;
@@ -338,9 +339,16 @@ module Shumway.Geometry {
         this.ty + "}";
     }
 
-    static createIdentity () {
+    public toWebGLMatrix(): Float32Array {
+      return new Float32Array([
+        this.a, this.b, 0, this.c, this.d, 0, this.tx, this.ty, 1
+      ]);
+    }
+
+    public static createIdentity() {
       return new Matrix(1, 0, 0, 1, 0, 0);
     }
+
     static multiply = function (dst, src) {
       dst.transform(src.a, src.b, src.c, src.d, src.tx, src.ty);
     };
@@ -379,7 +387,6 @@ module Shumway.Geometry {
         }
       }
     }
-
 
     addDirtyRectangle (rectangle: Rectangle) {
       var x = rectangle.x >> this.sizeInBits;
@@ -503,4 +510,206 @@ module Shumway.Geometry {
     }
   }
 
+  export module Path {
+    var CURVE_RECURSION_LIMIT = 32;
+    var CURVE_COLLINEARITY_EPSILON = 1e-30;
+    var CURVE_DISTANCE_EPSILON = 1e-30;
+    var CURVE_ANGLE_TOLERANCE_EPSILON = 0.01;
+    var ANGLE_TOLERANCE = 0;
+    var DISTANCE_TOLERANCE_SQUARE = 0.5 * 0.5;
+
+    /**
+     * De Casteljau Algorithm for Quadratic Curve Subdivision (Anti-Grain Geometry Implementation)
+     */
+    export function createQuadraticCurveVertices(vertices, index, x0, y0, x1, y1, x2, y2, level) {
+      if (level > CURVE_RECURSION_LIMIT) {
+        return 0;
+      }
+      // Find Mid-Points
+      var x01 = (x0 + x1) / 2;
+      var y01 = (y0 + y1) / 2;
+      var x12 = (x1 + x2) / 2;
+      var y12 = (y1 + y2) / 2;
+      var x012 = (x01 + x12) / 2;
+      var y012 = (y01 + y12) / 2;
+
+      var dx = x2 - x0;
+      var dy = y2 - y0;
+      var d = Math.abs((x1 - x2) * dy - (y1 - y2) * dx);
+
+      if (d > CURVE_COLLINEARITY_EPSILON) {
+        // Regular Case
+        if (d * d <= DISTANCE_TOLERANCE_SQUARE * (dx * dx + dy * dy)) {
+          if (ANGLE_TOLERANCE < CURVE_ANGLE_TOLERANCE_EPSILON) {
+            vertices[index + 0] = x012;
+            vertices[index + 1] = y012;
+            return index + 2;
+          }
+          // Angle & Cusp Condition
+          var da = Math.abs(Math.atan2(y2 - y1, x2 - x1) - Math.atan2(y1 - y0, x1 - x0));
+          if (da >= Math.PI) {
+            da = 2 * Math.PI - da;
+          }
+          if (da < ANGLE_TOLERANCE) {
+            vertices[index + 0] = x012;
+            vertices[index + 1] = y012;
+            return index + 2;
+          }
+        }
+      } else {
+        notImplemented("Collinear Case");
+      }
+      // Recursively Subdivide Curve
+      index = createQuadraticCurveVertices(vertices, index, x0, y0, x01, y01, x012, y012, level + 1);
+      index = createQuadraticCurveVertices(vertices, index, x012, y012, x12, y12, x2, y2, level + 1);
+      return index;
+    }
+
+    var Path = (function () {
+      var MOVE_TO             = 0x01;
+      var LINE_TO             = 0x02;
+      var QUADRATIC_CURVE_TO  = 0x03;
+      var ARC_TO              = 0x04;
+      var RECT                = 0x05;
+      var ARC                 = 0x06;
+      var ELLIPSE             = 0x07;
+      function path() {
+        this._buffer = new Shumway.Util.BufferWriter(1024);
+        this._x = 0;
+        this._y = 0;
+      }
+      path.prototype.hash = function () {
+        return this._buffer.hashWords(0, 0, this._buffer.offset >> 2);
+      };
+      path.prototype.clone = function () {
+        var path = new Path();
+        this.visit(path);
+        return path;
+      };
+      path.prototype.reset = function () {
+        this._x = 0;
+        this._y = 0;
+        this._buffer.reset();
+      };
+      path.prototype._bufferCommand = function (command, a, b, c, d, e, f, g, h) {
+        var buffer = this._buffer;
+        var offset = this._buffer.offset;
+        var bytesToWrite = arguments.length * 4;
+        buffer.ensureCapacity(offset + bytesToWrite);
+        buffer.writeIntUnsafe(command);
+        switch (command) {
+          case MOVE_TO:
+          case LINE_TO:
+            buffer.writeVertexUnsafe(a, b);
+            break;
+          case RECT:
+            buffer.writeVertexUnsafe(a, b);
+            buffer.writeFloatUnsafe(c);
+            buffer.writeFloatUnsafe(d);
+            break;
+          case QUADRATIC_CURVE_TO:
+            buffer.writeVertexUnsafe(a, b);
+            buffer.writeVertexUnsafe(c, d);
+            break;
+          default:
+            notImplemented(command);
+        }
+      };
+      path.prototype.closePath = function () {
+        notImplemented("closePath");
+      };
+      path.prototype.moveTo = function (x, y) {
+        this._bufferCommand(MOVE_TO, x, y);
+        this._x = x;
+        this._y = y;
+      };
+      path.prototype.lineTo = function (x, y) {
+        this._bufferCommand(LINE_TO, x, y);
+        this._x = x;
+        this._y = y;
+      };
+      path.prototype.quadraticCurveTo = function (cpx, cpy, x, y) {
+        this._bufferCommand(QUADRATIC_CURVE_TO, cpx, cpy, x, y);
+        this._x = x;
+        this._y = y;
+      };
+      path.prototype.bezierCurveTo = function (cp1x, cp1y, cp2x, cp2y, x, y) {
+        notImplemented("bezierCurveTo");
+      };
+      path.prototype.arcTo = function (x1, y1, x2, y2, radius) {
+        notImplemented("arcTo");
+      };
+      path.prototype.rect = function (x, y, w, h) {
+        this._bufferCommand(RECT, x, y, w, h);
+      };
+      path.prototype.arc = function (x, y, radius, startAngle, endAngle, anticlockwise) {
+        notImplemented("arc");
+      };
+      path.prototype.ellipse = function (x, y, radiusX, radiusY,  rotation, startAngle, endAngle, anticlockwise) {
+        notImplemented("ellipse");
+      };
+      path.prototype.trace = function (writer) {
+        this.visit({
+          moveTo: function (x, y) {
+            writer.writeLn("MOVE_TO: x: " + x + ", y: " + y);
+          },
+          lineTo: function (x, y) {
+            writer.writeLn("LINE_TO: x: " + x + ", y: " + y);
+          },
+          rect: function (x, y, w, h) {
+            writer.writeLn("RECT: x: " + x + ", y: " + y + ", w: " + w + ", h: " + h);
+          },
+          quadraticCurveTo: function (cpx, cpy, x, y) {
+            writer.writeLn("QUADRATIC_CURVE_TO: cpx: " + cpx + ", cpy: " + cpy + ", x: " + x + ", y: " + y);
+          }
+        });
+      };
+      path.prototype.visit = function (visitor) {
+        var i32 = this._buffer.i32;
+        var f32 = this._buffer.f32;
+        var i = 0;
+        var j = this._buffer.offset >> 2;
+        while (i < j) {
+          switch (i32[i++]) {
+            case MOVE_TO:
+              visitor.moveTo(f32[i++], f32[i++]);
+              break;
+            case LINE_TO:
+              visitor.lineTo(f32[i++], f32[i++]);
+              break;
+            case RECT:
+              visitor.rect(f32[i++], f32[i++], f32[i++], f32[i++]);
+              break;
+            case QUADRATIC_CURVE_TO:
+              visitor.quadraticCurveTo(f32[i++], f32[i++], f32[i++], f32[i++]);
+              break;
+            default:
+              notImplemented("");
+              break;
+          }
+        }
+      };
+      return path;
+    })();
+
+    /**
+     * A path made up of only MOVE_TO, LINE_TO commands.
+     */
+    var SimplePath = (function () {
+      // TODO: Hope this is large enough.
+      var tmp = new Float32Array(1024);
+      function simplePath() {
+        Path.call(this);
+      }
+      simplePath.prototype = Object.create(Path.prototype);
+      simplePath.prototype.quadraticCurveTo = function (cpx, cpy, x, y) {
+        var index = createQuadraticCurveVertices(tmp, 0, this._x, this._y, cpx, cpy, x, y, 0);
+        for (var i = 0; i < index; i += 2) {
+          this.lineTo(tmp[i], tmp[i + 1]);
+        }
+        this.lineTo(x, y);
+      };
+      return simplePath;
+    })();
+  }
 }

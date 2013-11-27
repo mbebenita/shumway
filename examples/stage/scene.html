@@ -18,9 +18,11 @@
   <script src="../../src/flash/util.js"></script>
   <script src="../inspector/js/classes/Timeline.js"></script>
   <script src="../inspector/js/classes/dat.gui.min.js"></script>
+  <script src="util.js"></script>
   <script src="geometry.js"></script>
   <script src="stage.js"></script>
   <script src="elements.js"></script>
+  <script src="gl.js"></script>
   <script>
     var Point = Shumway.Geometry.Point;
     var Rectangle = Shumway.Geometry.Rectangle;
@@ -32,6 +34,7 @@
     var Text = Shumway.Layers.Elements.Text;
     var Shape = Shumway.Layers.Elements.Shape;
     var Slider = Shumway.Layers.Elements.Slider;
+    var WebGLContext = Shumway.GL.WebGLContext;
   </script>
   <style>
     #debugInfoContainer {
@@ -65,7 +68,7 @@
     <!--<video id="video" src="http://upload.wikimedia.org/wikipedia/commons/7/79/Big_Buck_Bunny_small.ogv" controls="true"></video>-->
     <!--<canvas id="stageCanvas" width="512" height="256" style="background-color: #1F1F21;"></canvas>-->
     <!--<canvas id="stageCanvas" width="2048" height="1024" style="background-color: #1F1F21;"></canvas>-->
-    <canvas id="stageCanvas" style="background-color: white;"></canvas>
+    <canvas id="stageCanvas" style="background-color: #1F1F21;"></canvas>
   </div>
   <script>
 
@@ -131,7 +134,11 @@
     canvas.width = width * pixelRatio;
     canvas.height = height * pixelRatio;
 
-    var context = canvas.getContext("2d");
+
+    var context = new WebGLContext(canvas);
+
+
+    // var context = canvas.getContext("2d");
 
     context.font = 12 + 'px Consolas, "Liberation Mono", Courier, monospace';
 
@@ -154,6 +161,7 @@
       imageSmoothing: true,
       snap: false,
       alpha: false,
+      frameRate: 5,
 
       stop: function () {
         frames = Number.MAX_VALUE;
@@ -182,6 +190,7 @@
       var c = [];
       c.push(f.add(sceneOptions, "movement", 1, 1000).step(1));
       c.push(f.add(sceneOptions, "speed", 0.1, 200).step(0.1));
+      c.push(f.add(sceneOptions, "frameRate", 1, 60).step(1));
       c.push(f.add(sceneOptions, "render"));
       c.push(f.add(sceneOptions, "drawDirtyRegions"));
       c.push(f.add(sceneOptions, "drawLayers"));
@@ -294,7 +303,7 @@
 
     window.requestAnimationFrame = (function(){
       return function(callback) {
-        window.setTimeout(callback, 1000 / 24);
+        window.setTimeout(callback, 1000 / sceneOptions.frameRate);
       };
     })();
 
@@ -312,7 +321,7 @@
         timelineEnter("RENDER");
         if (sceneOptions.clear) {
           context.fillStyle = "#1F1F21";
-          context.fillRect(0, 0, stage.w, stage.h);
+          // context.fillRect(0, 0, stage.w, stage.h);
         }
         stage.render(context, {
           drawLayers: sceneOptions.drawLayers,
@@ -324,6 +333,7 @@
             drawGrid: false
           });
         }
+        context.flush();
         timelineLeave("RENDER");
       }
 
