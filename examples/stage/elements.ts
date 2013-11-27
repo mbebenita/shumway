@@ -5,29 +5,38 @@ import FrameContainer = Shumway.Layers.FrameContainer;
 module Shumway.Layers.Elements {
 
   class Flake extends Frame {
-    radius : number;
-    density : number;
-    rotationSpeed : number;
-    speed : number;
-    constructor(radius : number, density : number) {
+    radius: number;
+    density: number;
+    rotationSpeed: number;
+    speed: number;
+    fillStyle = randomStyle();
+    constructor(radius: number, density: number) {
       super();
       this.radius = radius;
       this.density = density;
-      this.speed = Math.random() < 0.2 ? (Math.random() / 5) : 0;
+      this.speed = Math.random() < 0.2 ? (Math.random() / 5): 0;
+    }
+    render (context: CanvasRenderingContext2D, options?: any) {
+      context.save();
+      var t = this.transform;
+      context.transform(t.a, t.b, t.c, t.d, t.tx, t.ty);
+      context.fillStyle = this.fillStyle;
+      context.fillRect(0, 0, this.w, this.h);
+      context.restore();
     }
   }
 
   export class Snow extends FrameContainer implements IAnimator {
-    private angle : number;
-    private speed : number;
-    constructor(count : number, radius : number, w : number, h : number) {
+    private angle: number;
+    private speed: number;
+    constructor(count: number, radius: number, w: number, h: number) {
       super();
       this.w = w;
       this.h = h;
       this.angle = Math.random();
       this.createFlakes(count, radius);
     }
-    private createFlakes(count : number, radius : number) {
+    private createFlakes(count: number, radius: number) {
       var radius = 10;
       for (var i = 0; i < count; i++) {
         var flake = new Flake(radius / 4 + Math.random() * radius + 1, Math.random() * count);
@@ -40,7 +49,7 @@ module Shumway.Layers.Elements {
     onEnterFrame () {
       this.angle += 0.01;
       for (var i = 0; i < this.children.length; i++) {
-        var flake : Flake = <Flake>this.children[i];
+        var flake: Flake = <Flake>this.children[i];
         flake.y += flake.speed * (Math.cos(this.angle + flake.density) + 1 + flake.radius / 2);
         flake.x += flake.speed * (Math.sin(this.angle) * 2);
         if (flake.x > this.w || flake.x < -flake.w || flake.y > this.h) {
@@ -53,10 +62,10 @@ module Shumway.Layers.Elements {
   }
 
   export class Shape extends Frame {
-    canvas : HTMLCanvasElement;
-    renderer : (context : CanvasRenderingContext2D) => void;
-    cacheAsBitmap : boolean;
-    constructor(renderer, w : number, h : number, cacheAsBitmap : boolean = true) {
+    canvas: HTMLCanvasElement;
+    renderer: (context: CanvasRenderingContext2D) => void;
+    cacheAsBitmap: boolean;
+    constructor(renderer, w: number, h: number, cacheAsBitmap: boolean = true) {
       super();
       this.renderer = renderer;
       this.w = w;
@@ -73,7 +82,7 @@ module Shumway.Layers.Elements {
       var context = this.canvas.getContext("2d");
       this.renderer(context);
     }
-    render (context : CanvasRenderingContext2D) {
+    render (context: CanvasRenderingContext2D) {
       context.save();
       var t = this.transform;
       context.transform(t.a, t.b, t.c, t.d, t.tx, t.ty);
@@ -88,60 +97,80 @@ module Shumway.Layers.Elements {
   }
 
   export class Bitmap extends Frame implements Shumway.IRenderable {
-    image : HTMLImageElement = document.createElement("img");
-    constructor(url : string) {
+    image: HTMLImageElement;
+    constructor(image: HTMLImageElement) {
       super();
-      var image = this.image;
-      image.src = url;
-      var bitmap = this;
-      this.image.onload = function () {
-        bitmap.w = image.width;
-        bitmap.h = image.height;
-      };
+      this.image = image;
+      if (image.complete) {
+        this.w = image.width;
+        this.h = image.height;
+      } else {
+        var thisFrame = this;
+        image.onload = function () {
+          thisFrame.w = image.width;
+          thisFrame.h = image.height;
+        }
+      }
     }
-    render (context : CanvasRenderingContext2D) {
+    render (context: CanvasRenderingContext2D, options?: any) {
       context.save();
       var t = this.transform;
       context.transform(t.a, t.b, t.c, t.d, t.tx, t.ty);
-      context.drawImage(this.image, 0, 0);
+      if (options && options.snap) {
+        context.save();
+        context.setTransform(1, 0, 0, 1, t.tx | 0, t.ty | 0);
+        context.drawImage(this.image, 0, 0);
+        context.restore();
+      } else {
+        context.drawImage(this.image, 0, 0);
+      }
       context.restore();
     }
   }
 
-  export class Text extends Frame implements Shumway.IRenderable {
-    text : string;
-    constructor (text : string, w : number) {
+  export class Video extends Frame implements Shumway.IRenderable {
+    video: HTMLVideoElement;
+    constructor(video: HTMLVideoElement) {
       super();
-      this.text = text;
-      this.w = w;
+      var that = this;
+//      var events = 'loadstart,suspend,abort,error,emptied,stalled,loadedmetadata,loadeddata,canplay,canplaythrough,playing,waiting,seeking,seeked,ended,durationchange,timeupdate,progress,play,pause,ratechange,volumechange'.split(',');
+//      for (var i = 0; i < events.length; i++) {
+//        this.video["on" + events[i]] = (function (name) {
+//          return function () {
+//            console.info("Event: " + name);
+//          }
+//        })(events[i])
+//      }
+      this.video = video;
+      if (video.videoWidth && video.videoHeight) {
+        this.w = video.videoWidth;
+        this.h = video.videoHeight;
+      } else {
+        var thisFrame = this;
+        video.onloadedmetadata = function () {
+          thisFrame.w = video.videoWidth;
+          thisFrame.h = video.videoHeight;
+        };
+      }
     }
-    render (context : CanvasRenderingContext2D) {
+    render (context: CanvasRenderingContext2D, options?: any) {
       context.save();
       var t = this.transform;
       context.transform(t.a, t.b, t.c, t.d, t.tx, t.ty);
-      context.font = "8pt Open Sans";
-
-      var words = this.text.split(" ");
-      var lines = [];
-      var run = 0;
-      var line = [];
-      var spaceLength = context.measureText(" ").width;
-      for (var i = 0; i < words.length; i++) {
-        var wordLength = context.measureText(words[i]).width;
-        if (run + wordLength > this.w) {
-          lines.push(line);
-          line = [];
-          run = 0;
-        } else {
-          line.push(words[i]);
-          run += wordLength + spaceLength;
-        }
+      if (options && options.alpha) {
+        context.globalAlpha = this.alpha;
       }
-      context.fillStyle = "#34aadc";
-      for (var i = 0; i < lines.length; i++) {
-        context.fillText(lines[i].join(" "), 0, 10 + i * 12);
+      if (options && options.snap) {
+        context.save();
+        context.setTransform(1, 0, 0, 1, t.tx | 0, t.ty | 0);
+        context.drawImage(this.video, 0, 0);
+        context.restore();
+      } else {
+        context.drawImage(this.video, 0, 0);
       }
-      this.h = lines.length * 12;
+      if (options && options.alpha) {
+        context.globalAlpha = 1;
+      }
       context.restore();
     }
   }

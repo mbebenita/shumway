@@ -17,7 +17,6 @@
   <script src="../../src/swf/util.js"></script>
   <script src="../../src/flash/util.js"></script>
   <script src="../inspector/js/classes/Timeline.js"></script>
-  <script src="../inspector/js/classes/Terminal.js"></script>
   <script src="../inspector/js/classes/dat.gui.min.js"></script>
   <script src="geometry.js"></script>
   <script src="stage.js"></script>
@@ -29,6 +28,7 @@
     var Stage = Shumway.Layers.Stage;
     var Snow = Shumway.Layers.Elements.Snow;
     var Bitmap = Shumway.Layers.Elements.Bitmap;
+    var Video = Shumway.Layers.Elements.Video;
     var Text = Shumway.Layers.Elements.Text;
     var Shape = Shumway.Layers.Elements.Shape;
     var Slider = Shumway.Layers.Elements.Slider;
@@ -61,36 +61,35 @@
   </div>
 
   <div style="clear: both;">
-    <canvas id="stageCanvas" width="1024" height="512" style="background-color: #1F1F21;"></canvas>
-    <!--<canvas id="stageCanvas" width="1024" height="1024" style="background-color: #1F1F21;"></canvas>-->
-    <!--<canvas id="stageCanvas" width="1024" height="1024" style="background-color: white;"></canvas>-->
+    <!--<video id="video" src="http://upload.wikimedia.org/wikipedia/commons/4/41/Big_Buck_Bunny_medium.ogv" controls="true"></video>-->
+    <!--<video id="video" src="http://upload.wikimedia.org/wikipedia/commons/7/79/Big_Buck_Bunny_small.ogv" controls="true"></video>-->
+    <!--<canvas id="stageCanvas" width="512" height="256" style="background-color: #1F1F21;"></canvas>-->
+    <!--<canvas id="stageCanvas" width="2048" height="1024" style="background-color: #1F1F21;"></canvas>-->
+    <canvas id="stageCanvas" style="background-color: white;"></canvas>
   </div>
-  <div id="debugInfoContainer">
-    <canvas id="traceTerminal" width="600" height="800" tabindex='2'></canvas>
-  </div>
-
   <script>
-    function shuffle(target) {
+
+    function shuffle(target, easing) {
       var tween = new TWEEN.Tween(target);
-      tween.easing(TWEEN.Easing.Exponential.InOut);
+      tween.easing(easing);
       function next() {
         var w = 128, h = 128;
         var x = Math.max(0, Math.random() * (canvas.width - w));
         var y = Math.max(0, Math.random() * (canvas.height - h));
         var s = 0.25 + Math.random() * 1;
-        var s = 1;
-        tween.easing(TWEEN.Easing.Exponential.Out);
-        tween.delay(Math.random() * options.movement * 1000);
+        // var s = 1;
+        tween.easing(easing);
+        tween.delay(Math.random() * (500000 / sceneOptions.movement));
         tween.to({
           x: x,
           y: y,
           scaleX: s,
           scaleY: s
           // rotation: (Math.random() - 0.5) * 90
-        }, 2000).start();
-        if (Math.random() < 0.1) {
-          tween.stop();
-        }
+        }, 100000 / sceneOptions.speed).start();
+//        if (Math.random() < 0.1) {
+//          tween.stop();
+//        }
       }
       next();
       tween.onComplete(next);
@@ -103,154 +102,236 @@
     //    return x - Math.floor(x);
     // };
 
-    var traceTerminal = new Terminal(document.getElementById("traceTerminal")); traceTerminal.refreshEvery(100);
-    function appendToTraceTerminal(str, color) {
-      var scroll = traceTerminal.isScrolledToBottom();
-      traceTerminal.buffer.append(str, color);
-      if (scroll) {
-        traceTerminal.gotoLine(traceTerminal.buffer.length - 1);
-        traceTerminal.scrollIntoView();
-      }
-    }
-    var logToConsole = false;
-    var console_log = console.log;
-    var console_info = console.info;
-    var console_warn = console.warn;
-    console.log = function (str) {
-      if (logToConsole) {
-        console_log.apply(console, arguments);
-      }
-      appendToTraceTerminal([].join.call(arguments, " "));
-    };
-    console.info = function (str) {
-      if (logToConsole) {
-        console_info.apply(console, arguments);
-      }
-      appendToTraceTerminal([].join.call(arguments, " "), "#666600");
-    };
-    console.warn = function (str) {
-      if (logToConsole) {
-        console_warn.apply(console, arguments);
-      }
-      appendToTraceTerminal([].join.call(arguments, " "), "#FF6700");
-    };
 
-    var timeline = new Timeline(document.getElementById("frameTimeline"));
-    timeline.setFrameRate(60);
-    timeline.refreshEvery(60);
+    var timeline;
+
+    if (true) {
+      timeline = new Timeline(document.getElementById("frameTimeline"));
+      timeline.setFrameRate(60);
+      timeline.refreshEvery(60);
+    }
+
+    function timelineEnter(name) {
+      timeline && timeline.enter(name);
+    }
+
+    function timelineLeave(name) {
+      timeline && timeline.leave(name);
+    }
 
     var canvas = document.getElementById("stageCanvas");
+
+    var pixelRatio = 'devicePixelRatio' in window ? window.devicePixelRatio : 1;
+
+    var width = window.innerWidth * 0.75 | 0;
+    var height = 512;
+
+    canvas.style.width = width + 'px';
+    canvas.style.height = height + 'px';
+    canvas.width = width * pixelRatio;
+    canvas.height = height * pixelRatio;
+
     var context = canvas.getContext("2d");
 
     context.font = 12 + 'px Consolas, "Liberation Mono", Courier, monospace';
 
     var gui = new dat.GUI();
 
-    var options = {
+    var sceneOptions = {
       flakes: 1,
       shapes: 0,
-      bitmaps: 1,
+      bitmaps: 2,
+      videos: 2,
       text: 1,
+      cacheAsBitmap: false,
+
       movement: 20,
+      speed: 20,
       render: true,
       drawDirtyRegions: false,
       drawLayers: false,
-      clear: false,
-      cacheAsBitmap: false
+      clear: true,
+      imageSmoothing: true,
+      snap: false,
+      alpha: false,
+
+      stop: function () {
+        frames = Number.MAX_VALUE;
+      }
     };
 
-    gui.remember(options);
-    for (var k in options) {
-      gui.add(options, k);
-    }
+    gui.remember(sceneOptions);
+
+    (function addSceneOptions() {
+      var f = gui.addFolder("Scene Options");
+      var c = [];
+      c.push(f.add(sceneOptions, "flakes", 0, 10000).step(1));
+      c.push(f.add(sceneOptions, "shapes", 0, 100).step(1));
+      c.push(f.add(sceneOptions, "bitmaps", 0, 1000).step(2));
+      c.push(f.add(sceneOptions, "videos", 0, 10).step(1));
+      c.push(f.add(sceneOptions, "text", 0, 1000).step(1));
+      c.push(f.add(sceneOptions, "cacheAsBitmap"));
+      f.open();
+      c.forEach(function (x) {
+        x.onFinishChange(updateScene);
+      })
+    })();
+
+    (function addOptions() {
+      var f = gui.addFolder("Options");
+      var c = [];
+      c.push(f.add(sceneOptions, "movement", 1, 1000).step(1));
+      c.push(f.add(sceneOptions, "speed", 0.1, 200).step(0.1));
+      c.push(f.add(sceneOptions, "render"));
+      c.push(f.add(sceneOptions, "drawDirtyRegions"));
+      c.push(f.add(sceneOptions, "drawLayers"));
+      c.push(f.add(sceneOptions, "clear"));
+      c.push(f.add(sceneOptions, "imageSmoothing"));
+      c.push(f.add(sceneOptions, "snap"));
+      c.push(f.add(sceneOptions, "alpha"));
+      f.open();
+      c.forEach(function (x) {
+        x.onFinishChange(updateOptions);
+      })
+    })();
 
 
-    function getColor(fill) {
-      var rgb = fill.color;
-      return [
-        ((rgb >> 16) & 0xff) / 255,
-        ((rgb >> 8) & 0xff) / 255,
-        (rgb & 0xff) / 255,
-        fill.alpha / 1
+
+    (function addButtons() {
+      var f = gui.addFolder("Commands");
+      var c = [];
+      c.push(f.add(sceneOptions, "stop"));
+      f.open();
+    })();
+
+    var stage, animators;
+
+    var videoElements;
+
+    function ensureLoadedVideos() {
+      if (videoElements) {
+        return;
+      }
+      videoElements = [];
+      var urls = [
+        "http://vjs.zencdn.net/v/oceans.webm",
+        // "http://upload.wikimedia.org/wikipedia/commons/7/79/Big_Buck_Bunny_small.ogv",
+        // "http://video.webmfiles.org/elephants-dream.webm",
+        // "http://video.webmfiles.org/big-buck-bunny_trailer.webm"
       ];
+
+      urls.forEach(function (url) {
+        var videoElement = document.createElement("video");
+        videoElement.src = url;
+        videoElement.loop = true;
+        videoElement.muted = true;
+        videoElements.push(videoElement);
+        // videoElement.play();
+      });
     }
 
-    var KEY_R = 82;
-    var KEY_M = 77;
-    var KEY_Z = 90;
+    function updateScene() {
+      stage = new Stage(canvas.width, canvas.height);
+      animators = [];
 
-    var stage = new Stage(canvas.width, canvas.height);
-    var animators = [];
-//    var snow = new Snow(options.flakes, 32, canvas.width, canvas.height);
-//    animators.push(snow);
-//    stage.addChild(snow);
+      for (var i = 0; i < 10; i++) {
+        var snow = new Snow(sceneOptions.flakes / 10, 32, canvas.width, canvas.height);
+        animators.push(snow);
+        stage.addChild(snow);
+      }
 
+      for (var i = 0; i < sceneOptions.text; i++) {
+        var frame = new Shape(renderTextShape(randomText()), 256, 200, sceneOptions.cacheAsBitmap);
+        frame.x = (Math.random()) * canvas.width;
+        frame.y = (Math.random()) * canvas.height;
+        frame.alpha = Math.random();
+        stage.addChild(frame);
+        shuffle(frame, TWEEN.Easing.Exponential.Out);
+      }
 
-    for (var i = 0; i < options.text; i++) {
-      var shape = new Text(randomText(), 256);
-      shape.x = (Math.random() - 0.5) * 10000;
-      shape.y = (Math.random() - 0.5) * 10000;
-      stage.addChild(shape);
-      shuffle(shape);
+      for (var i = 0; i < sceneOptions.shapes; i++) {
+        var frame = new Shape(renderGuy, 100, 110, sceneOptions.cacheAsBitmap);
+        frame.x = (Math.random()) * canvas.width;
+        frame.y = (Math.random()) * canvas.height;
+        frame.alpha = Math.random();
+        stage.addChild(frame);
+        shuffle(frame, TWEEN.Easing.Exponential.Out);
+      }
+
+      for (var i = 0; i < sceneOptions.bitmaps; i++) {
+        var image = document.createElement("img");
+        image.src = "firefox_logo_small.png";
+        var frame = new Bitmap(image);
+        frame.x = (Math.random()) * canvas.width;
+        frame.y = (Math.random()) * canvas.height;
+        frame.alpha = Math.random();
+        stage.addChild(frame);
+        shuffle(frame, TWEEN.Easing.Exponential.Out);
+      }
+
+      for (var i = 0; i < sceneOptions.videos; i++) {
+        ensureLoadedVideos();
+        var videoElement = videoElements[Math.random() * videoElements.length | 0];
+        videoElement.play();
+        var frame = new Video(videoElement);
+        frame.x = Math.random() * 100;
+        frame.y = Math.random() * 100;
+        frame.alpha = Math.random();
+        stage.addChild(frame);
+        shuffle(frame, TWEEN.Easing.Exponential.Out);
+      }
+
+      stage.shuffleChildren();
     }
 
-    for (var i = 0; i < options.shapes; i++) {
-      var shape = new Shape(renderGuy, 100, 110, options.cacheAsBitmap);
-      shape.x = (Math.random() - 0.5) * 10000;
-      shape.y = (Math.random() - 0.5) * 10000;
-      stage.addChild(shape);
-      shuffle(shape);
+    function updateOptions() {
+      context.imageSmoothingEnabled = context.mozImageSmoothingEnabled = sceneOptions.imageSmoothing;
     }
 
-    for (var i = 0; i < options.bitmaps; i++) {
-      var bitmap = new Bitmap("../filter/firefox.png");
-      bitmap.x = (Math.random() - 0.5) * 10000;
-      bitmap.y = (Math.random() - 0.5) * 10000;
-      stage.addChild(bitmap);
-      shuffle(bitmap);
-    }
+    updateScene();
 
     var mousePosition;
+
+    window.requestAnimationFrame = (function(){
+      return function(callback) {
+        window.setTimeout(callback, 1000 / 24);
+      };
+    })();
 
     var frames = 0;
     (function tick() {
       TWEEN.update();
-      timeline.enter("FRAME");
+      timelineEnter("FRAME");
       var now = performance.now();
-      if (mousePosition) {
-//        timeline.enter("SELECT");
-        for (var i = 0; i < options.select; i++) {
-          stage.select(mousePosition.x, mousePosition.y);
-        }
-//        timeline.leave("SELECT");
-      }
 
       animators.forEach(function (animator) {
         animator.onEnterFrame(now);
       });
 
-      if (options.render) {
-        timeline.enter("RENDER");
-        if (options.clear) {
+      if (sceneOptions.render) {
+        timelineEnter("RENDER");
+        if (sceneOptions.clear) {
           context.fillStyle = "#1F1F21";
           context.fillRect(0, 0, stage.w, stage.h);
         }
-        stage.render(context, {drawLayers: options.drawLayers});
-        if (options.drawDirtyRegions) {
+        stage.render(context, {
+          drawLayers: sceneOptions.drawLayers,
+          snap: sceneOptions.snap,
+          alpha: sceneOptions.alpha
+        });
+        if (sceneOptions.drawDirtyRegions) {
           stage.dirtyRegion.render(context, {
             drawGrid: false
           });
         }
-        timeline.leave("RENDER");
+        timelineLeave("RENDER");
       }
 
-      timeline.leave("FRAME");
-      // console.info("Dirty Ratio: " + stage.dirtyRegion.getDirtyRatio().toFixed(2));
+      timelineLeave("FRAME");
       stage.dirtyRegion.clear();
       if (frames ++ < 10000) {
         requestAnimationFrame(tick);
       }
-
     })();
 
     function getMousePosition(canvas, evt) {
@@ -265,133 +346,7 @@
 
     canvas.addEventListener('mousemove', function(evt) {
       mousePosition = getMousePosition(canvas, evt);
-      if (!mouseDown) {
-        return;
-      }
-      if (selected) {
-        var point = new Point(mousePosition.x, mousePosition.y);
-        if (selected.parent) {
-          selected.parent.transformPoint(point);
-          if (!originalPosition) {
-            originalPosition = new Point(mousePosition.x, mousePosition.y);
-            selected.transformPoint(originalPosition);
-          }
-          selected.x = point.x - originalPosition.x;
-          selected.y = point.y - originalPosition.y;
-        }
-      }
-
     }, false);
-
-    var mouseDown = false;
-    canvas.addEventListener('mousedown', function(evt) {
-      mouseDown = true;
-    }, false);
-
-    canvas.addEventListener('mouseup', function(evt) {
-      mouseDown = false;
-      originalPosition = null;
-    }, false);
-
-    canvas.addEventListener('click', function(evt) {
-//      if (mousePosition) {
-//        selected = scene.select(mousePosition.x, mousePosition.y);
-//      }
-    }, false);
-
-    document.addEventListener('keypress', function(evt) {
-      return;
-    }, false);
-
-    var keys = [];
-    document.addEventListener('keydown', function(evt) {
-      return;
-      console.info("keydown: " + evt.keyCode);
-      keys[evt.keyCode] = true;
-      if (!selected) {
-        return;
-      }
-      var now = performance.now();
-      var until = now + 10000;
-      switch (evt.keyCode) {
-        case KEY_R:
-          animators.push(new Animator.Rotate(selected, until));
-          break;
-        case KEY_M:
-          animators.push(new Animator.Slide(selected, until));
-          break;
-        case KEY_Z:
-          animators.push(new Animator.Scale(selected, until));
-          break;
-      }
-
-    }, false);
-
-    document.addEventListener('keyup', function(evt) {
-      keys[evt.keyCode] = false;
-    }, false);
-
-
-    function timeIt(fn, message, count) {
-      count = count || 0;
-      var start = performance.now();
-      for (var i = 0; i < count; i++) {
-        fn();
-      }
-      var elapsed = (performance.now() - start);
-      // console.info("Measure: " + message + " Count: " + count + " Elapsed: " + elapsed.toFixed(4) + " (" + (elapsed / count).toFixed(4) + ")");
-      console.info(message + ": " + elapsed.toFixed(4));
-    }
-
-    function microBenchmarks() {
-      timeIt(function () {
-        var rectangle = Rectangle.createEmpty();
-        var transform = new Matrix();
-        transform.rotate(0.123);
-        transform.translate(10, 10);
-        for (var i = 0; i < 10000; i++) {
-          rectangle.set(0, 0, 100, 100);
-          transform.transformRectangleAABB(rectangle);
-        }
-      }, "Compute AABBs", 1024);
-
-      timeIt(function () {
-        var x0 = 4, x1 = 1, x2 = 14, x3 = 9, s = 0;
-        for (var i = 0; i < 50000; i++) {
-          s += Math.min(x0, x1, x2, x3);
-        }
-        return s;
-      }, "Min 4", 1024);
-
-      timeIt(function () {
-        var x0 = 4, x1 = 1, x2 = 14, x3 = 9, s = 0;
-        for (var i = 0; i < 50000; i++) {
-          var tmp = 0;
-          if (x0 > x1) { tmp = x0; x0 = x1; x1 = tmp; }
-          if (x2 > x3) { tmp = x2; x2 = x3; x3 = tmp; }
-          s += x0 < x2 ? x0 : x2;
-        }
-        return s;
-      }, "Min 4 Fast", 1024);
-    }
-
-    /*
-    gui.add({
-      microBenchmarks: microBenchmarks
-    }, 'microBenchmarks').name("Benchmark");
-
-    gui.add({
-      select: function () {
-        timeIt(function () {
-          for (var x = 0; x < stage.w; x += 4) {
-            for (var y = 0; y < stage.h; y += 4) {
-              stage.select(x, y);
-            }
-          }
-        }, "Select Every Pixel", 1);
-      }
-    }, 'select').name("Select");
-    */
 
   </script>
 </body>

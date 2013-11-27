@@ -7,7 +7,31 @@ var sampleText = [
 function randomText() {
   return sampleText[Math.random() * sampleText.length | 0];
 }
-
+function renderTextShape(str) {
+  return function renderText(c) {
+    c.font = "8pt Open Sans";
+    var words = str.split(" ");
+    var lines = [];
+    var run = 0;
+    var line = [];
+    var spaceLength = c.measureText(" ").width;
+    for (var i = 0; i < words.length; i++) {
+      var wordLength = c.measureText(words[i]).width;
+      if (run + wordLength > this.w) {
+        lines.push(line);
+        line = [];
+        run = 0;
+      } else {
+        line.push(words[i]);
+        run += wordLength + spaceLength;
+      }
+    }
+    c.fillStyle = "#34aadc";
+    for (var i = 0; i < lines.length; i++) {
+      c.fillText(lines[i].join(" "), 0, 10 + i * 12);
+    }
+  }
+}
 
 function renderGuy(c) {
   c.save();

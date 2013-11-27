@@ -5,35 +5,35 @@ module Shumway.Layers {
   import DirtyRegion = Shumway.Geometry.DirtyRegion;
 
   export class Frame implements Shumway.IRenderable {
-    get x() : number {
+    get x(): number {
       return this.transform.tx;
     }
-    set x(value : number) {
+    set x(value: number) {
       this.transform.tx = value;
       this.invalidate();
     }
-    get y() : number {
+    get y(): number {
       return this.transform.ty;
     }
-    set y(value : number) {
+    set y(value: number) {
       this.transform.ty = value;
       this.invalidate();
     }
-    get scaleX() : number {
+    get scaleX(): number {
       return this.transform.a;
     }
-    set scaleX(value : number) {
+    set scaleX(value: number) {
       this.transform.a = value;
       this.invalidate();
     }
-    get scaleY() : number {
+    get scaleY(): number {
       return this.transform.d;
     }
-    set scaleY(value : number) {
+    set scaleY(value: number) {
       this.transform.d = value;
       this.invalidate();
     }
-    set rotation(value : number) {
+    set rotation(value: number) {
       value %= 360;
       if (value > 180) {
         value -= 360;
@@ -52,16 +52,24 @@ module Shumway.Layers {
       this.transform = m;
       this.invalidate();
     }
-    public w : number;
-    public h : number;
-    public transform : Matrix;
-    public parent : Frame;
-    public isInvalid : boolean;
+    get alpha(): number {
+      return this._alpha;
+    }
+    set alpha(value: number) {
+      this._alpha = value;
+      this.invalidate();
+    }
+    public w: number;
+    public h: number;
+    private _alpha: number;
+    public transform: Matrix;
+    public parent: Frame;
+    public isInvalid: boolean;
     constructor () {
       this.parent = null;
       this.transform = Matrix.createIdentity();
     }
-    get stage() : Stage {
+    get stage(): Stage {
       var frame = this;
       while (frame.parent) {
         frame = frame.parent;
@@ -71,7 +79,7 @@ module Shumway.Layers {
       }
       return null;
     }
-    public getConcatenatedTransform() : Matrix {
+    public getConcatenatedTransform(): Matrix {
       var frame = this;
       var m = this.transform.clone();
       while (frame.parent) {
@@ -83,28 +91,21 @@ module Shumway.Layers {
     private invalidate() {
       this.isInvalid = true;
     }
-    public render(context : CanvasRenderingContext2D) {
+    public render(context: CanvasRenderingContext2D, options?: any) {
       context.save();
       var t = this.transform;
       context.transform(t.a, t.b, t.c, t.d, t.tx, t.ty);
-//      if (this.children.length === 0) {
-//        context.beginPath();
-//        context.rect(0, 0, this.w, this.h);
-//        context.closePath();
-//        context.fillStyle = this._fillStyle;
-//        context.fill();
-//      }
 
       context.restore();
     }
 
-    public visit (visitor : (Frame, Matrix?) => void, transform : Matrix) {
-      var stack : Frame [];
-      var frame : Frame;
-      var frameContainer : FrameContainer;
+    public visit (visitor: (Frame, Matrix?) => void, transform: Matrix) {
+      var stack: Frame [];
+      var frame: Frame;
+      var frameContainer: FrameContainer;
       if (transform) {
         stack = [this];
-        var transforms : Matrix [];
+        var transforms: Matrix [];
         transforms = [transform];
         while (stack.length > 0) {
           frame = stack.pop();
@@ -134,42 +135,55 @@ module Shumway.Layers {
   }
 
   export class FrameContainer extends Frame {
-    public children : Frame [];
+    public children: Frame [];
     constructor() {
       super();
       this.children = [];
     }
-    public addChild(child : Frame) {
+
+    public addChild(child: Frame) {
       child.parent = this;
       this.children.push(child);
     }
-    public render(context : CanvasRenderingContext2D) {
+
+    public shuffleChildren() {
+      var length = this.children.length;
+      for (var i = 0; i < length * 2; i++) {
+        var a = Math.random() * length | 0;
+        var b = Math.random() * length | 0;
+        var t = this.children[a];
+        this.children[a] = this.children[b];
+        this.children[b] = t;
+      }
+    }
+
+    public render(context: CanvasRenderingContext2D, options?: any) {
       context.save();
       for (var i = 0; i < this.children.length; i++) {
-        this.children[i].render(context);
+        this.children[i].render(context, options);
       }
       context.restore();
     }
   }
 
   export class Stage extends FrameContainer implements Shumway.IRenderable {
-    public dirtyRegion : DirtyRegion;
-    constructor(w : number, h : number) {
+    public dirtyRegion: DirtyRegion;
+    constructor(w: number, h: number) {
       super()
       this.w = w;
       this.h = h;
       this.dirtyRegion = new DirtyRegion(w, h);
     }
 
-    public render(context : CanvasRenderingContext2D, options? : any) {
+    public render(context: CanvasRenderingContext2D, options?: any) {
       var layers = this.gatherLayers();
 
       context.strokeStyle = "#E0F8D8";
       this.gatherDirtyRegions();
-      super.render(context);
+      super.render(context, options);
 
       if (options && options.drawLayers) {
-        function drawRectangle(rectangle : Rectangle) {
+        function drawRectangle(rectangle: Rectangle) {
           context.rect(rectangle.x, rectangle.y, rectangle.w, rectangle.h);
         }
         context.strokeStyle = "#FF4981";
@@ -185,7 +199,7 @@ module Shumway.Layers {
     gatherDirtyRegions() {
       var that = this;
       // Find all invalid frames.
-      this.visit(function (frame : Frame, transform? : Matrix) {
+      this.visit(function (frame: Frame, transform?: Matrix) {
         if (frame.isInvalid) {
           var rectangle = new Rectangle(0, 0, frame.w, frame.h);
           transform.transformRectangleAABB(rectangle);
@@ -196,26 +210,33 @@ module Shumway.Layers {
     }
 
     gatherLayers() {
-      // Visit
       var layers = [];
-      var layer;
-      this.visit(function (frame : Frame, transform? : Matrix) {
+      var currentLayer;
+      this.visit(function (frame: Frame, transform?: Matrix) {
+        if (frame instanceof FrameContainer) {
+          return;
+        }
         var rectangle = new Rectangle(0, 0, frame.w, frame.h);
         transform.transformRectangleAABB(rectangle);
         if (frame.isInvalid) {
-          if (layer) {
-            layers.push(layer);
+          if (currentLayer) {
+            layers.push(currentLayer);
           }
           layers.push(rectangle.clone());
-          layer = null;
+          currentLayer = null;
         } else {
-          if (!layer) {
-            layer = rectangle.clone();
+          if (!currentLayer) {
+            currentLayer = rectangle.clone();
           } else {
-            layer.union(rectangle);
+            currentLayer.union(rectangle);
           }
         }
       }, this.transform);
+
+      if (currentLayer) {
+        layers.push(currentLayer);
+      }
+
       return layers;
     }
   }

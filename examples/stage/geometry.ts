@@ -1,49 +1,49 @@
 /// <reference path='all.ts'/>
 module Shumway.Geometry {
   export class Point {
-    x : number;
-    y : number;
-    constructor (x : number, y : number) {
+    x: number;
+    y: number;
+    constructor (x: number, y: number) {
       this.x = x;
       this.y = y;
     }
-    setElements (x : number, y : number) {
+    setElements (x: number, y: number) {
       this.x = x;
       this.y = y;
     }
-    set (other : Point) {
+    set (other: Point) {
       this.x = other.x;
       this.y = other.y;
     }
     toString () {
       return "{ x: " + this.x + ", y: " + this.y + "}";
     }
-    static createEmpty() : Point {
+    static createEmpty(): Point {
       return new Point(0, 0);
     }
   }
 
   export class Rectangle {
-    x : number;
-    y : number;
-    w : number;
-    h : number;
-    constructor (x : number, y : number, w : number, h : number) {
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    constructor (x: number, y: number, w: number, h: number) {
       this.setElements(x, y, w, h);
     }
-    setElements (x : number, y : number, w : number, h : number) {
+    setElements (x: number, y: number, w: number, h: number) {
       this.x = x;
       this.y = y;
       this.w = w;
       this.h = h;
     }
-    set (other : Rectangle) {
+    set (other: Rectangle) {
       this.x = other.x;
       this.y = other.y;
       this.w = other.w;
       this.h = other.h;
     }
-    contains (other : Rectangle) : boolean {
+    contains (other: Rectangle): boolean {
       var r1 = other.x + other.w;
       var b1 = other.y + other.h;
       var r2 = this.x + this.w;
@@ -57,7 +57,7 @@ module Shumway.Geometry {
         (b1 > this.y) &&
         (b1 <= b2);
     }
-    union (other : Rectangle) {
+    union (other: Rectangle) {
       var x = this.x, y = this.y;
       if (this.x > other.x) {
         x = other.x;
@@ -78,14 +78,14 @@ module Shumway.Geometry {
       this.w = x0 - x;
       this.h = y0 - y;
     }
-    isEmpty () : boolean {
+    isEmpty (): boolean {
       return this.w <= 0 || this.h <= 0;
     }
     setEmpty () {
       this.w = 0;
       this.h = 0;
     }
-    intersect (other : Rectangle) {
+    intersect (other: Rectangle) {
       var result = Rectangle.createEmpty();
       if (this.isEmpty() || other.isEmpty()) {
         result.setEmpty();
@@ -100,7 +100,7 @@ module Shumway.Geometry {
       }
       this.set(result);
     }
-    intersects (other) : boolean {
+    intersects (other): boolean {
       if (this.isEmpty() || other.isEmpty()) {
         return false;
       }
@@ -114,11 +114,11 @@ module Shumway.Geometry {
       return true;
     }
 
-    area () : number {
+    area (): number {
       return this.w * this.h;
     }
 
-    clone () : Rectangle {
+    clone (): Rectangle {
       return new Rectangle(this.x, this.y, this.w, this.h);
     }
 
@@ -135,7 +135,7 @@ module Shumway.Geometry {
       this.h = y1 - this.y;
     }
 
-    toString() : string {
+    toString(): string {
       return "{" +
         this.x + ", " +
         this.y + ", " +
@@ -143,22 +143,22 @@ module Shumway.Geometry {
         this.h +
       "}";
     }
-    static createEmpty() : Rectangle {
+    static createEmpty(): Rectangle {
       return new Rectangle(0, 0, 0, 0);
     }
   }
 
   export class Matrix {
-    a : number;
-    b : number;
-    c : number;
-    d : number;
-    tx : number;
-    ty : number;
-    constructor (a : number, b : number, c : number, d : number, tx : number, ty : number) {
+    a: number;
+    b: number;
+    c: number;
+    d: number;
+    tx: number;
+    ty: number;
+    constructor (a: number, b: number, c: number, d: number, tx: number, ty: number) {
       this.setElements(a, b, c, d, tx, ty);
     }
-    setElements (a : number, b : number, c : number, d : number, tx : number, ty : number) {
+    setElements (a: number, b: number, c: number, d: number, tx: number, ty: number) {
       this.a = a;
       this.b = b;
       this.c = c;
@@ -166,7 +166,7 @@ module Shumway.Geometry {
       this.tx = tx;
       this.ty = ty;
     }
-    set (other : Matrix) {
+    set (other: Matrix) {
       this.a = other.a;
       this.b = other.b;
       this.c = other.c;
@@ -174,10 +174,10 @@ module Shumway.Geometry {
       this.tx = other.tx;
       this.ty = other.ty;
     }
-    clone () : Matrix {
+    clone (): Matrix {
       return new Matrix(this.a, this.b, this.c, this.d, this.tx, this.ty);
     }
-    transform (a : number, b : number, c : number, d : number, tx : number, ty : number) {
+    transform (a: number, b: number, c: number, d: number, tx: number, ty: number) {
       var _a = this.a, _b = this.b, _c = this.c, _d = this.d, _tx = this.tx, _ty = this.ty;
       this.a =  _a * a + _c * b;
       this.b =  _b * a + _d * b;
@@ -186,7 +186,7 @@ module Shumway.Geometry {
       this.tx = _a * tx + _c * ty + _tx;
       this.ty = _b * tx + _d * ty + _ty;
     }
-    transformRectangleAABB (rectangle : Rectangle) {
+    transformRectangleAABB (rectangle: Rectangle) {
       var a = this.a;
       var b = this.b;
       var c = this.c;
@@ -225,7 +225,7 @@ module Shumway.Geometry {
       rectangle.y = y0 < y2 ? y0 : y2;
       rectangle.h = (y1 > y3 ? y1 : y3) - rectangle.y;
     }
-    scale (x : number, y : number) {
+    scale (x: number, y: number) {
       this.a *= x;
       this.b *= y;
       this.c *= x;
@@ -233,7 +233,7 @@ module Shumway.Geometry {
       this.tx *= x;
       this.ty *= y;
     }
-    rotate (angle : number) {
+    rotate (angle: number) {
       var a = this.a, b = this.b, c = this.c, d = this.d, tx = this.tx, ty = this.ty;
       var u = Math.cos(angle);
       var v = Math.sin(angle);
@@ -244,7 +244,7 @@ module Shumway.Geometry {
       this.tx = tx *  u - ty * v;
       this.ty = tx *  v + ty * u;
     }
-    concat (other : Matrix) {
+    concat (other: Matrix) {
       var a = this.a * other.a;
       var b = 0.0;
       var c = 0.0;
@@ -268,7 +268,7 @@ module Shumway.Geometry {
       this.tx = tx;
       this.ty = ty;
     }
-    translate (x : number, y : number) {
+    translate (x: number, y: number) {
       this.tx += x;
       this.ty += y;
     }
@@ -280,19 +280,19 @@ module Shumway.Geometry {
       this.tx = 0;
       this.ty = 0;
     }
-    transformPoint (point : Point) {
+    transformPoint (point: Point) {
       var x = point.x;
       var y = point.y;
       point.x = this.a * x + this.c * y + this.tx;
       point.y = this.b * x + this.d * y + this.ty;
     }
-    deltaTransformPoint (point : Point) {
+    deltaTransformPoint (point: Point) {
       var x = point.x;
       var y = point.y;
       point.x = this.a * x + this.c * y;
       point.y = this.b * x + this.d * y;
     }
-    inverse (result : Matrix) {
+    inverse (result: Matrix) {
       var m11 = this.a;
       var m12 = this.b;
       var m21 = this.c;
@@ -328,7 +328,7 @@ module Shumway.Geometry {
       result.ty = dy;
     }
 
-    toString () : string {
+    toString (): string {
       return "{" +
         this.a + ", " +
         this.b + ", " +
@@ -346,35 +346,44 @@ module Shumway.Geometry {
     };
   }
   export class DirtyRegion implements Shumway.IRenderable {
-    private static SIZE_IN_BITS = 7;
-    private static SIZE = 1 << DirtyRegion.SIZE_IN_BITS;
     private static tmpRectangle = Rectangle.createEmpty();
-    private grid : DirtyRegion.Cell [];
-    w : number;
-    h : number;
-    c : number;
-    r : number;
-    constructor (w, h) {
-      var size = DirtyRegion.SIZE;
+    private grid: DirtyRegion.Cell [][];
+
+    private w: number;
+    private h: number;
+    private c: number;
+    private r: number;
+    private size: number;
+    private sizeInBits: number;
+
+    constructor (w, h, sizeInBits = 7) {
+      var size = this.size = 1 << sizeInBits;
+      this.sizeInBits = sizeInBits;
       this.w = w;
       this.h = h;
       this.c = Math.ceil(w / size);
       this.r = Math.ceil(h / size);
       this.grid = [];
-      for (var j = 0; j < this.r; j++) {
-        for (var i = 0; i < this.c; i++) {
-          this.grid.push(new DirtyRegion.Cell(new Rectangle(i * size, j * size, size, size)));
+      for (var y = 0; y < this.r; y++) {
+        this.grid.push([]);
+        for (var x = 0; x < this.c; x++) {
+          this.grid[y][x] = new DirtyRegion.Cell(new Rectangle(x * size, y * size, size, size));
         }
       }
     }
+
     clear () {
-      for (var i = 0; i < this.grid.length; i++) {
-        this.grid[i].clear();
+      for (var y = 0; y < this.r; y++) {
+        for (var x = 0; x < this.c; x++) {
+          this.grid[y][x].clear();
+        }
       }
     }
-    addDirtyRectangle (rectangle : Rectangle) {
-      var x = rectangle.x >> DirtyRegion.SIZE_IN_BITS;
-      var y = rectangle.y >> DirtyRegion.SIZE_IN_BITS;
+
+
+    addDirtyRectangle (rectangle: Rectangle) {
+      var x = rectangle.x >> this.sizeInBits;
+      var y = rectangle.y >> this.sizeInBits;
       if (x >= this.c || y >= this.r) {
         return;
       }
@@ -384,7 +393,7 @@ module Shumway.Geometry {
       if (y < 0) {
         y = 0;
       }
-      var cell = this.grid[y * this.c + x];
+      var cell = this.grid[y][x];
       rectangle = rectangle.clone();
       rectangle.snap();
 
@@ -395,11 +404,11 @@ module Shumway.Geometry {
           cell.bounds.union(rectangle);
         }
       } else {
-        var w = Math.min(this.c, Math.ceil((rectangle.x + rectangle.w) / DirtyRegion.SIZE)) - x;
-        var h = Math.min(this.r, Math.ceil((rectangle.y + rectangle.h) / DirtyRegion.SIZE)) - y;
+        var w = Math.min(this.c, Math.ceil((rectangle.x + rectangle.w) / this.size)) - x;
+        var h = Math.min(this.r, Math.ceil((rectangle.y + rectangle.h) / this.size)) - y;
         for (var i = 0; i < w; i++) {
           for (var j = 0; j < h; j++) {
-            var cell = this.grid[(y + j) * this.c + (x + i)];
+            var cell = this.grid[y + j][x + i];
             var intersection = cell.region.clone();
             intersection.intersect(rectangle);
             if (!intersection.isEmpty()) {
@@ -409,27 +418,46 @@ module Shumway.Geometry {
         }
       }
     }
-    getDirtyRatio () : number {
+
+    gatherRegions (regions: Rectangle[]) {
+      for (var y = 0; y < this.r; y++) {
+        for (var x = 0; x < this.c; x++) {
+          var bounds = this.grid[y][x].bounds;
+          if (!bounds.isEmpty()) {
+            regions.push(this.grid[y][x].bounds);
+          }
+        }
+      }
+    }
+
+    gatherOptimizedRegions (regions: Rectangle[]) {
+      this.gatherRegions(regions);
+    }
+
+    getDirtyRatio (): number {
       var totalArea = this.w * this.h;
       if (totalArea === 0) {
         return 0;
       }
       var dirtyArea = 0;
-      for (var i = 0; i < this.grid.length; i++) {
-        dirtyArea += this.grid[i].bounds.area();
+      for (var y = 0; y < this.r; y++) {
+        for (var x = 0; x < this.c; x++) {
+          dirtyArea += this.grid[y][x].region.area();
+        }
       }
       return dirtyArea / totalArea;
     }
-    render (context : CanvasRenderingContext2D, options? : any) {
-      function drawRectangle(rectangle : Rectangle) {
+
+    render (context: CanvasRenderingContext2D, options?: any) {
+      function drawRectangle(rectangle: Rectangle) {
         context.rect(rectangle.x, rectangle.y, rectangle.w, rectangle.h);
       }
 
       if (options && options.drawGrid) {
         context.strokeStyle = "white";
-        for (var i = 0; i < this.c; i++) {
-          for (var j = 0; j < this.r; j++) {
-            var cell = this.grid[j * this.c + i];
+        for (var y = 0; y < this.r; y++) {
+          for (var x = 0; x < this.c; x++) {
+            var cell = this.grid[y][x];
             context.beginPath();
             drawRectangle(cell.region);
             context.closePath();
@@ -439,23 +467,33 @@ module Shumway.Geometry {
       }
 
       context.strokeStyle = "#E0F8D8";
-      for (var i = 0; i < this.c; i++) {
-        for (var j = 0; j < this.r; j++) {
-          var cell = this.grid[j * this.c + i];
+      for (var y = 0; y < this.r; y++) {
+        for (var x = 0; x < this.c; x++) {
+          var cell = this.grid[y][x];
           context.beginPath();
           drawRectangle(cell.bounds);
           context.closePath();
           context.stroke();
         }
       }
+
+//      context.strokeStyle = "#5856d6";
+//      var regions = [];
+//      this.gatherOptimizedRegions(regions);
+//      for (var i = 0; i < regions.length; i++) {
+//        context.beginPath();
+//        drawRectangle(regions[i]);
+//        context.closePath();
+//        context.stroke();
+//      }
     }
   }
 
   module DirtyRegion {
     export class Cell {
-      region : Rectangle;
-      bounds : Rectangle;
-      constructor(region : Rectangle) {
+      region: Rectangle;
+      bounds: Rectangle;
+      constructor(region: Rectangle) {
         this.region = region;
         this.bounds = Rectangle.createEmpty();
       }
