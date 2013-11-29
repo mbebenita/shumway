@@ -8,6 +8,7 @@ module Shumway.Layers.Elements {
     radius: number;
     density: number;
     rotationSpeed: number;
+    scaleSpeed: number;
     speed: number;
     fillStyle = randomStyle();
     constructor(radius: number, density: number) {
@@ -15,6 +16,8 @@ module Shumway.Layers.Elements {
       this.radius = radius;
       this.density = density;
       this.speed = Math.random() < 0.2 ? (Math.random() / 5): 0;
+      this.rotationSpeed = Math.random();
+      this.scaleSpeed = 0.01 + Math.random() / 20;
     }
     render (context: CanvasRenderingContext2D, options?: any) {
       context.save();
@@ -37,12 +40,13 @@ module Shumway.Layers.Elements {
       this.createFlakes(count, radius);
     }
     private createFlakes(count: number, radius: number) {
-      var radius = 10;
       for (var i = 0; i < count; i++) {
         var flake = new Flake(radius / 4 + Math.random() * radius + 1, Math.random() * count);
         flake.x = Math.random() * this.w | 0;
         flake.y = Math.random() * this.h | 0;
         flake.h = flake.w = radius / 2 + Math.random() * radius;
+        flake.origin.x = flake.w / 2;
+        flake.origin.y = flake.h / 2;
         this.addChild(flake);
       }
     }
@@ -56,7 +60,11 @@ module Shumway.Layers.Elements {
           flake.x = Math.random() * (this.w - flake.w);
           flake.y = Math.random() * (this.h - flake.h) / 2;
         }
-        // flake.rotation += flake.rotationSpeed;
+        flake.rotation += flake.rotationSpeed;
+        if (flake.scaleX + flake.scaleSpeed > 2 || flake.scaleX + flake.scaleSpeed < 0.5) {
+          flake.scaleSpeed *= -1;
+        }
+        flake.scaleX += flake.scaleSpeed;
       }
     }
   }

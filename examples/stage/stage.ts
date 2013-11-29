@@ -1,74 +1,108 @@
 /// <reference path='all.ts'/>
 module Shumway.Layers {
   import Rectangle = Shumway.Geometry.Rectangle;
+  import Point = Shumway.Geometry.Point;
   import Matrix = Shumway.Geometry.Matrix;
   import DirtyRegion = Shumway.Geometry.DirtyRegion;
 
   export class Frame implements Shumway.IRenderable {
+    private _x: number;
+    private _y: number;
+    private _alpha: number;
+    private _scaleX: number;
+    private _scaleY: number;
+    private _rotation: number;
+    private _transform: Matrix;
+    private _isTransformInvalid: boolean = true;
+
     get x(): number {
-      return this.transform.tx;
+      return this._x;
     }
+
     set x(value: number) {
-      this.transform.tx = value;
-      this.invalidate();
+      this._x = value;
+      this.invalidateTransform();
     }
+
     get y(): number {
-      return this.transform.ty;
+      return this._y;
     }
+
     set y(value: number) {
-      this.transform.ty = value;
-      this.invalidate();
+      this._y = value;
+      this.invalidateTransform();
     }
+
     get scaleX(): number {
-      return this.transform.a;
+      return this._scaleX;
     }
+
     set scaleX(value: number) {
-      this.transform.a = value;
-      this.invalidate();
+      this._scaleX = value;
+      this.invalidateTransform();
     }
+
     get scaleY(): number {
-      return this.transform.d;
+      return this._scaleY;
     }
+
     set scaleY(value: number) {
-      this.transform.d = value;
-      this.invalidate();
+      this._scaleY = value;
+      this.invalidateTransform();
     }
+
+    get rotation(): number {
+      return this._rotation;
+    }
+
     set rotation(value: number) {
-      value %= 360;
-      if (value > 180) {
-        value -= 360;
-      }
-      var angle = value / 180 * Math.PI;
-      var u = Math.cos(angle);
-      var v = Math.sin(angle);
-      var m = new Matrix (
-        u * this.scaleX,
-        v * this.scaleX,
-       -v * this.scaleY,
-        u * this.scaleY,
-        this.x,
-        this.y
-      );
-      this.transform = m;
-      this.invalidate();
+      this._rotation = value;
+      this.invalidateTransform();
     }
+
     get alpha(): number {
       return this._alpha;
     }
+
     set alpha(value: number) {
       this._alpha = value;
       this.invalidate();
     }
+
+    get transform(): Matrix {
+      if (this._isTransformInvalid) {
+        this._transform.setIdentity();
+        this._transform.translate(-this.origin.x, -this.origin.y);
+        this._transform.scale(this._scaleX, this._scaleY);
+        this._transform.rotate(this._rotation * Math.PI / 180);
+        this._transform.translate(this._x, this._y);
+        this._isTransformInvalid = false;
+      }
+      return this._transform;
+    }
+
+    set transform(value: Matrix) {
+      this._transform = value;
+      this._x = value.getTranslateX();
+      this._y = value.getTranslateY();
+      this._scaleX = value.getScaleX();
+      this._scaleY = value.getScaleY();
+      this._rotation = value.getRotation();
+      this._isTransformInvalid = false;
+      this.invalidate();
+    }
+
     public w: number;
     public h: number;
-    private _alpha: number;
-    public transform: Matrix;
     public parent: Frame;
     public isInvalid: boolean;
+    public origin: Point = new Point(0, 0);
+
     constructor () {
       this.parent = null;
       this.transform = Matrix.createIdentity();
     }
+
     get stage(): Stage {
       var frame = this;
       while (frame.parent) {
@@ -79,6 +113,7 @@ module Shumway.Layers {
       }
       return null;
     }
+
     public getConcatenatedTransform(): Matrix {
       var frame = this;
       var m = this.transform.clone();
@@ -88,9 +123,17 @@ module Shumway.Layers {
       }
       return m;
     }
+
     private invalidate() {
       this.isInvalid = true;
     }
+
+    private invalidateTransform() {
+      this._isTransformInvalid = true;
+      this.invalidate();
+    }
+
+
     public render(context: CanvasRenderingContext2D, options?: any) {
       context.save();
       var t = this.transform;
@@ -176,7 +219,8 @@ module Shumway.Layers {
     }
 
     public render(context: CanvasRenderingContext2D, options?: any) {
-      var layers = this.gatherLayers();
+      // var layers = this.gatherLayers();
+      var layers = [];
 
       context.strokeStyle = "#E0F8D8";
       this.gatherDirtyRegions();
@@ -207,6 +251,16 @@ module Shumway.Layers {
           frame.isInvalid = false;
         }
       }, this.transform);
+    }
+
+    gatherFrames() {
+      var frames = [];
+      this.visit(function (frame: Frame, transform?: Matrix) {
+        if (!(frame instanceof FrameContainer)) {
+          frames.push(frame);
+        }
+      }, this.transform);
+      return frames;
     }
 
     gatherLayers() {

@@ -4,23 +4,36 @@ module Shumway.Geometry {
   export class Point {
     x: number;
     y: number;
+
     constructor (x: number, y: number) {
       this.x = x;
       this.y = y;
     }
+
     setElements (x: number, y: number) {
       this.x = x;
       this.y = y;
     }
+
     set (other: Point) {
       this.x = other.x;
       this.y = other.y;
     }
+
     toString () {
       return "{ x: " + this.x + ", y: " + this.y + "}";
     }
+
     static createEmpty(): Point {
       return new Point(0, 0);
+    }
+
+    static createEmptyPoints(count: number): Point [] {
+      var result = [];
+      for (var i = 0; i < count; i++) {
+        result.push(new Point(0, 0));
+      }
+      return result;
     }
   }
 
@@ -29,21 +42,25 @@ module Shumway.Geometry {
     y: number;
     w: number;
     h: number;
+
     constructor (x: number, y: number, w: number, h: number) {
       this.setElements(x, y, w, h);
     }
+
     setElements (x: number, y: number, w: number, h: number) {
       this.x = x;
       this.y = y;
       this.w = w;
       this.h = h;
     }
+
     set (other: Rectangle) {
       this.x = other.x;
       this.y = other.y;
       this.w = other.w;
       this.h = other.h;
     }
+
     contains (other: Rectangle): boolean {
       var r1 = other.x + other.w;
       var b1 = other.y + other.h;
@@ -58,6 +75,7 @@ module Shumway.Geometry {
         (b1 > this.y) &&
         (b1 <= b2);
     }
+
     union (other: Rectangle) {
       var x = this.x, y = this.y;
       if (this.x > other.x) {
@@ -79,13 +97,16 @@ module Shumway.Geometry {
       this.w = x0 - x;
       this.h = y0 - y;
     }
+
     isEmpty (): boolean {
       return this.w <= 0 || this.h <= 0;
     }
+
     setEmpty () {
       this.w = 0;
       this.h = 0;
     }
+
     intersect (other: Rectangle) {
       var result = Rectangle.createEmpty();
       if (this.isEmpty() || other.isEmpty()) {
@@ -101,6 +122,7 @@ module Shumway.Geometry {
       }
       this.set(result);
     }
+
     intersects (other): boolean {
       if (this.isEmpty() || other.isEmpty()) {
         return false;
@@ -144,6 +166,7 @@ module Shumway.Geometry {
         this.h +
       "}";
     }
+
     static createEmpty(): Rectangle {
       return new Rectangle(0, 0, 0, 0);
     }
@@ -156,9 +179,11 @@ module Shumway.Geometry {
     d: number;
     tx: number;
     ty: number;
+
     constructor (a: number, b: number, c: number, d: number, tx: number, ty: number) {
       this.setElements(a, b, c, d, tx, ty);
     }
+
     setElements (a: number, b: number, c: number, d: number, tx: number, ty: number) {
       this.a = a;
       this.b = b;
@@ -167,6 +192,7 @@ module Shumway.Geometry {
       this.tx = tx;
       this.ty = ty;
     }
+
     set (other: Matrix) {
       this.a = other.a;
       this.b = other.b;
@@ -175,9 +201,11 @@ module Shumway.Geometry {
       this.tx = other.tx;
       this.ty = other.ty;
     }
+
     clone (): Matrix {
       return new Matrix(this.a, this.b, this.c, this.d, this.tx, this.ty);
     }
+
     transform (a: number, b: number, c: number, d: number, tx: number, ty: number) {
       var _a = this.a, _b = this.b, _c = this.c, _d = this.d, _tx = this.tx, _ty = this.ty;
       this.a =  _a * a + _c * b;
@@ -187,6 +215,30 @@ module Shumway.Geometry {
       this.tx = _a * tx + _c * ty + _tx;
       this.ty = _b * tx + _d * ty + _ty;
     }
+
+    transformRectangle (rectangle: Rectangle, points: Point[]) {
+      var a = this.a;
+      var b = this.b;
+      var c = this.c;
+      var d = this.d;
+      var tx = this.tx;
+      var ty = this.ty;
+
+      var x = rectangle.x;
+      var y = rectangle.y;
+      var w = rectangle.w;
+      var h = rectangle.h;
+
+      points[0].x = a + c * y + tx;
+      points[0].y = b * x + d * y + ty;
+      points[1].x = a * (x + w) + c * y + tx;
+      points[1].y = b * (x + w) + d * y + ty;
+      points[2].x = a * (x + w) + c * (y + h) + tx;
+      points[2].y = b * (x + w) + d * (y + h) + ty;
+      points[3].x = a * x + c * (y + h) + tx;
+      points[3].y = b * x + d * (y + h) + ty;
+    }
+
     transformRectangleAABB (rectangle: Rectangle) {
       var a = this.a;
       var b = this.b;
@@ -226,6 +278,7 @@ module Shumway.Geometry {
       rectangle.y = y0 < y2 ? y0 : y2;
       rectangle.h = (y1 > y3 ? y1 : y3) - rectangle.y;
     }
+
     scale (x: number, y: number) {
       this.a *= x;
       this.b *= y;
@@ -234,17 +287,19 @@ module Shumway.Geometry {
       this.tx *= x;
       this.ty *= y;
     }
+
     rotate (angle: number) {
       var a = this.a, b = this.b, c = this.c, d = this.d, tx = this.tx, ty = this.ty;
-      var u = Math.cos(angle);
-      var v = Math.sin(angle);
-      this.a =   a *  u +  c * v;
-      this.b =   b *  u +  d * v;
-      this.c =   a * -v +  c * u;
-      this.d =   b * -v +  d * u;
-      this.tx = tx *  u - ty * v;
-      this.ty = tx *  v + ty * u;
+      var cos = Math.cos(angle);
+      var sin = Math.sin(angle);
+      this.a  = cos * a  - sin * b;
+      this.b  = sin * a  + cos * b;
+      this.c  = cos * c  - sin * d;
+      this.d  = sin * c  + cos * d;
+      this.tx = cos * tx - sin * ty;
+      this.ty * sin * tx + cos * ty;
     }
+
     concat (other: Matrix) {
       var a = this.a * other.a;
       var b = 0.0;
@@ -269,10 +324,12 @@ module Shumway.Geometry {
       this.tx = tx;
       this.ty = ty;
     }
+
     translate (x: number, y: number) {
       this.tx += x;
       this.ty += y;
     }
+
     setIdentity () {
       this.a = 1;
       this.b = 0;
@@ -281,18 +338,27 @@ module Shumway.Geometry {
       this.tx = 0;
       this.ty = 0;
     }
+
     transformPoint (point: Point) {
       var x = point.x;
       var y = point.y;
       point.x = this.a * x + this.c * y + this.tx;
       point.y = this.b * x + this.d * y + this.ty;
     }
+
+    transformPoints (points: Point[]) {
+      for (var i = 0; i < points.length; i++) {
+        this.transformPoint(points[i]);
+      }
+    }
+
     deltaTransformPoint (point: Point) {
       var x = point.x;
       var y = point.y;
       point.x = this.a * x + this.c * y;
       point.y = this.b * x + this.d * y;
     }
+
     inverse (result: Matrix) {
       var m11 = this.a;
       var m12 = this.b;
@@ -327,6 +393,28 @@ module Shumway.Geometry {
       result.d = m22;
       result.tx = dx;
       result.ty = dy;
+    }
+
+    getTranslateX(): number {
+      return this.tx;
+    }
+
+    getTranslateY(): number {
+      return this.tx;
+    }
+
+    getScaleX(): number {
+      var result = Math.sqrt(this.a * this.a + this.b * this.b);
+      return this.a > 0 ? result : -result;
+    }
+
+    getScaleY(): number {
+      var result = Math.sqrt(this.c * this.c + this.d * this.d);
+      return this.d > 0 ? result : -result;
+    }
+
+    getRotation(): number {
+      return Math.atan(this.b / this.a) * 180 / Math.PI;
     }
 
     toString (): string {
@@ -565,6 +653,7 @@ module Shumway.Geometry {
       return index;
     }
 
+    /*
     var Path = (function () {
       var MOVE_TO             = 0x01;
       var LINE_TO             = 0x02;
@@ -691,10 +780,12 @@ module Shumway.Geometry {
       };
       return path;
     })();
+    */
 
     /**
      * A path made up of only MOVE_TO, LINE_TO commands.
      */
+    /*
     var SimplePath = (function () {
       // TODO: Hope this is large enough.
       var tmp = new Float32Array(1024);
@@ -711,5 +802,83 @@ module Shumway.Geometry {
       };
       return simplePath;
     })();
+    */
+
+    /**
+     * Simple 2D bin-packing algorithm that recursively partitions space along the x and y axis. The binary tree
+     * can get quite deep so watch out of deep recursive calls. This algorithm works best when inserting items
+     * that are sorted by width and height, from largest to smallest.
+     */
+    export class RectanglePacker {
+      /**
+       * Try out randomizing the orientation of each subdivision, sometimes this can lead to better results.
+       */
+      static RANDOM_ORIENTATION: boolean = true;
+
+      private root: RectanglePacker.Cell;
+
+      constructor(w: number, h: number) {
+        this.root = new Shumway.Geometry.Path.RectanglePacker.Cell(0, 0, w, h, false);
+      }
+
+      public insert(w: number, h: number): Point {
+        return this.root.insert(w, h);
+      }
+    }
+
+    module RectanglePacker {
+      export class Cell extends Rectangle {
+        children: Cell [];
+        horizontal: boolean;
+        empty: boolean;
+        constructor(x: number, y: number, w: number, h: number, horizontal: boolean) {
+          super(x, y, w, h);
+          this.children = null;
+          this.horizontal = horizontal;
+          this.empty = true;
+        }
+        insert (w: number, h: number): Point {
+          if (!this.empty) {
+            return;
+          }
+          if (this.w < w || this.h < h) {
+            return;
+          }
+          if (!this.children) {
+            var orientation = !this.horizontal;
+            if (RectanglePacker.RANDOM_ORIENTATION) {
+              orientation = Math.random() >= 0.5;
+            }
+            if (this.horizontal) {
+              this.children = [
+                new Cell(this.x, this.y, this.w, h, false),
+                new Cell(this.x, this.y + h, this.w, this.h - h, orientation),
+              ];
+            } else {
+              this.children = [
+                new Cell(this.x, this.y, w, this.h, true),
+                new Cell(this.x + w, this.y, this.w - w, this.h, orientation),
+              ];
+            }
+            var first = this.children[0];
+            if (first.w === w && first.h === h) {
+              first.empty = false;
+              return new Point(first.x, first.y);
+            }
+            return this.insert(w, h);
+          } else {
+            var result;
+            result = this.children[0].insert(w, h);
+            if (result) {
+              return result;
+            }
+            result = this.children[1].insert(w, h);
+            if (result) {
+              return result;
+            }
+          }
+        }
+      }
+    }
   }
 }

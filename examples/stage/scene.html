@@ -79,16 +79,16 @@
         var w = 128, h = 128;
         var x = Math.max(0, Math.random() * (canvas.width - w));
         var y = Math.max(0, Math.random() * (canvas.height - h));
-        var s = 0.25 + Math.random() * 1;
-        // var s = 1;
+        var s = 0.25 + Math.random() * 10;
+        var s = (Math.random() - 0.5) * 10;
         tween.easing(easing);
         tween.delay(Math.random() * (500000 / sceneOptions.movement));
         tween.to({
           x: x,
           y: y,
           scaleX: s,
-          scaleY: s
-          // rotation: (Math.random() - 0.5) * 90
+          scaleY: -s
+          // rotation: (Math.random() - 0.5) * 180
         }, 100000 / sceneOptions.speed).start();
 //        if (Math.random() < 0.1) {
 //          tween.stop();
@@ -135,13 +135,6 @@
     canvas.height = height * pixelRatio;
 
 
-    var context = new WebGLContext(canvas);
-
-
-    // var context = canvas.getContext("2d");
-
-    context.font = 12 + 'px Consolas, "Liberation Mono", Courier, monospace';
-
     var gui = new dat.GUI();
 
     var sceneOptions = {
@@ -151,6 +144,7 @@
       videos: 2,
       text: 1,
       cacheAsBitmap: false,
+      webGL: false,
 
       movement: 20,
       speed: 20,
@@ -179,6 +173,7 @@
       c.push(f.add(sceneOptions, "videos", 0, 10).step(1));
       c.push(f.add(sceneOptions, "text", 0, 1000).step(1));
       c.push(f.add(sceneOptions, "cacheAsBitmap"));
+      c.push(f.add(sceneOptions, "webGL"));
       f.open();
       c.forEach(function (x) {
         x.onFinishChange(updateScene);
@@ -212,6 +207,10 @@
       c.push(f.add(sceneOptions, "stop"));
       f.open();
     })();
+
+    var context = sceneOptions.webGL ? new WebGLContext(canvas) : canvas.getContext("2d");
+
+    context.font = 12 + 'px Consolas, "Liberation Mono", Courier, monospace';
 
     var stage, animators;
 
@@ -313,15 +312,20 @@
       timelineEnter("FRAME");
       var now = performance.now();
 
+      timelineEnter("ANIMATE");
       animators.forEach(function (animator) {
         animator.onEnterFrame(now);
       });
+
+      timelineLeave("ANIMATE");
 
       if (sceneOptions.render) {
         timelineEnter("RENDER");
         if (sceneOptions.clear) {
           context.fillStyle = "#1F1F21";
-          // context.fillRect(0, 0, stage.w, stage.h);
+          if (!sceneOptions.webGL) {
+            context.fillRect(0, 0, stage.w, stage.h);
+          }
         }
         stage.render(context, {
           drawLayers: sceneOptions.drawLayers,
@@ -333,7 +337,9 @@
             drawGrid: false
           });
         }
-        context.flush();
+        if (sceneOptions.webGL) {
+          context.flush();
+        }
         timelineLeave("RENDER");
       }
 
