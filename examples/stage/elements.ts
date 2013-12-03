@@ -4,7 +4,7 @@ import FrameContainer = Shumway.Layers.FrameContainer;
 
 module Shumway.Layers.Elements {
 
-  class Flake extends Frame {
+  export class Flake extends Frame implements Shumway.IRenderable {
     radius: number;
     density: number;
     rotationSpeed: number;
@@ -105,7 +105,7 @@ module Shumway.Layers.Elements {
   }
 
   export class Bitmap extends Frame implements Shumway.IRenderable {
-    image: HTMLImageElement;
+    public image: HTMLImageElement;
     constructor(image: HTMLImageElement) {
       super();
       this.image = image;

@@ -598,6 +598,83 @@ module Shumway.Geometry {
     }
   }
 
+  /**
+   * Simple 2D bin-packing algorithm that recursively partitions space along the x and y axis. The binary tree
+   * can get quite deep so watch out of deep recursive calls. This algorithm works best when inserting items
+   * that are sorted by width and height, from largest to smallest.
+   */
+  export class RectanglePacker {
+    /**
+     * Try out randomizing the orientation of each subdivision, sometimes this can lead to better results.
+     */
+    static RANDOM_ORIENTATION: boolean = true;
+
+    private root: RectanglePacker.Cell;
+
+    constructor(w: number, h: number) {
+      this.root = new Shumway.Geometry.RectanglePacker.Cell(0, 0, w, h, false);
+    }
+
+    public insert(w: number, h: number): Point {
+      return this.root.insert(w, h);
+    }
+  }
+
+  module RectanglePacker {
+    export class Cell extends Rectangle {
+      children: Cell [];
+      horizontal: boolean;
+      empty: boolean;
+      constructor(x: number, y: number, w: number, h: number, horizontal: boolean) {
+        super(x, y, w, h);
+        this.children = null;
+        this.horizontal = horizontal;
+        this.empty = true;
+      }
+      insert (w: number, h: number): Point {
+        if (!this.empty) {
+          return;
+        }
+        if (this.w < w || this.h < h) {
+          return;
+        }
+        if (!this.children) {
+          var orientation = !this.horizontal;
+          if (RectanglePacker.RANDOM_ORIENTATION) {
+            orientation = Math.random() >= 0.5;
+          }
+          if (this.horizontal) {
+            this.children = [
+              new Cell(this.x, this.y, this.w, h, false),
+              new Cell(this.x, this.y + h, this.w, this.h - h, orientation),
+            ];
+          } else {
+            this.children = [
+              new Cell(this.x, this.y, w, this.h, true),
+              new Cell(this.x + w, this.y, this.w - w, this.h, orientation),
+            ];
+          }
+          var first = this.children[0];
+          if (first.w === w && first.h === h) {
+            first.empty = false;
+            return new Point(first.x, first.y);
+          }
+          return this.insert(w, h);
+        } else {
+          var result;
+          result = this.children[0].insert(w, h);
+          if (result) {
+            return result;
+          }
+          result = this.children[1].insert(w, h);
+          if (result) {
+            return result;
+          }
+        }
+      }
+    }
+  }
+
   export module Path {
     var CURVE_RECURSION_LIMIT = 32;
     var CURVE_COLLINEARITY_EPSILON = 1e-30;
@@ -803,82 +880,5 @@ module Shumway.Geometry {
       return simplePath;
     })();
     */
-
-    /**
-     * Simple 2D bin-packing algorithm that recursively partitions space along the x and y axis. The binary tree
-     * can get quite deep so watch out of deep recursive calls. This algorithm works best when inserting items
-     * that are sorted by width and height, from largest to smallest.
-     */
-    export class RectanglePacker {
-      /**
-       * Try out randomizing the orientation of each subdivision, sometimes this can lead to better results.
-       */
-      static RANDOM_ORIENTATION: boolean = true;
-
-      private root: RectanglePacker.Cell;
-
-      constructor(w: number, h: number) {
-        this.root = new Shumway.Geometry.Path.RectanglePacker.Cell(0, 0, w, h, false);
-      }
-
-      public insert(w: number, h: number): Point {
-        return this.root.insert(w, h);
-      }
-    }
-
-    module RectanglePacker {
-      export class Cell extends Rectangle {
-        children: Cell [];
-        horizontal: boolean;
-        empty: boolean;
-        constructor(x: number, y: number, w: number, h: number, horizontal: boolean) {
-          super(x, y, w, h);
-          this.children = null;
-          this.horizontal = horizontal;
-          this.empty = true;
-        }
-        insert (w: number, h: number): Point {
-          if (!this.empty) {
-            return;
-          }
-          if (this.w < w || this.h < h) {
-            return;
-          }
-          if (!this.children) {
-            var orientation = !this.horizontal;
-            if (RectanglePacker.RANDOM_ORIENTATION) {
-              orientation = Math.random() >= 0.5;
-            }
-            if (this.horizontal) {
-              this.children = [
-                new Cell(this.x, this.y, this.w, h, false),
-                new Cell(this.x, this.y + h, this.w, this.h - h, orientation),
-              ];
-            } else {
-              this.children = [
-                new Cell(this.x, this.y, w, this.h, true),
-                new Cell(this.x + w, this.y, this.w - w, this.h, orientation),
-              ];
-            }
-            var first = this.children[0];
-            if (first.w === w && first.h === h) {
-              first.empty = false;
-              return new Point(first.x, first.y);
-            }
-            return this.insert(w, h);
-          } else {
-            var result;
-            result = this.children[0].insert(w, h);
-            if (result) {
-              return result;
-            }
-            result = this.children[1].insert(w, h);
-            if (result) {
-              return result;
-            }
-          }
-        }
-      }
-    }
   }
 }

@@ -10,6 +10,15 @@ declare function unexpected(...args : any[]);
 declare function notImplemented(...args : any[]);
 declare var release;
 
+declare class IndentingWriter {
+  writeLn(str: string);
+  enter(str: string);
+  leaveAndEnter(str: string);
+  leave(str: string);
+  indent(str: string);
+  outdent(str: string);
+}
+
 module Shumway {
   export interface IRenderable {
     render (context : CanvasRenderingContext2D, options? : any);

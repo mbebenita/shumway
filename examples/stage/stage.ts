@@ -165,6 +165,7 @@ module Shumway.Layers {
           visitor(frame, transform);
         }
       } else {
+        notImplemented();
 //        stack = [this];
 //        while (stack.length > 0) {
 //          frame = stack.pop();
