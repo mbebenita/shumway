@@ -620,7 +620,6 @@ module Shumway.GL {
       if (this.currentJob) {
         this.currentJob.finish();
       }
-      console.info("Render Jobs: " + this._jobQueue.length);
       while (this._jobQueue.length) {
         this._jobQueue.shift().draw(draw);
       }
