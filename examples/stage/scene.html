@@ -4,7 +4,6 @@
   <title></title>
 </head>
 <body style="background-color: #333333;">
-<link href='http://fonts.googleapis.com/css?family=Open+Sans' rel='stylesheet' type='text/css'>
   <script src="tween.js"></script>
   <script src="shapes.js"></script>
   <script src="../../src/avm2/options.js"></script>
@@ -68,8 +67,8 @@
     <!--<video id="video" src="http://upload.wikimedia.org/wikipedia/commons/4/41/Big_Buck_Bunny_medium.ogv" controls="true"></video>-->
     <!--<video id="video" src="http://upload.wikimedia.org/wikipedia/commons/7/79/Big_Buck_Bunny_small.ogv" controls="true"></video>-->
     <!--<canvas id="stageCanvas" width="512" height="256" style="background-color: #1F1F21;"></canvas>-->
-    <!--<canvas id="stageCanvas" width="2048" height="1024" style="background-color: #1F1F21;"></canvas>-->
-    <canvas id="stageCanvas" style="background-color: #1F1F21;"></canvas>
+    <canvas id="stageCanvas" width="2048" height="1024" style="background-color: #1F1F21;"></canvas>
+    <!--<canvas id="stageCanvas" style="background-color: #1F1F21;"></canvas>-->
   </div>
   <script>
 
@@ -80,15 +79,15 @@
         var w = 128, h = 128;
         var x = Math.max(0, Math.random() * (canvas.width - w));
         var y = Math.max(0, Math.random() * (canvas.height - h));
-        var s = 0.25 + Math.random() * 10;
-        var s = (Math.random() - 0.5) * 10;
+        var s = 0.25 + Math.random() * 2;
+        // var s = (Math.random() - 0.5) * 10;
         tween.easing(easing);
         tween.delay(Math.random() * (500000 / sceneOptions.movement));
         tween.to({
           x: x,
           y: y,
           scaleX: s,
-          scaleY: -s
+          scaleY: s
           // rotation: (Math.random() - 0.5) * 180
         }, 100000 / sceneOptions.speed).start();
 //        if (Math.random() < 0.1) {
@@ -128,7 +127,7 @@
     var pixelRatio = 'devicePixelRatio' in window ? window.devicePixelRatio : 1;
 
     var width = window.innerWidth * 0.75 | 0;
-    var height = 512;
+    var height = width / 2 | 0;
 
     canvas.style.width = width + 'px';
     canvas.style.height = height + 'px';
@@ -172,8 +171,8 @@
       var c = [];
       c.push(f.add(sceneOptions, "flakes", 0, 50000).step(1));
       c.push(f.add(sceneOptions, "shapes", 0, 100).step(1));
-      c.push(f.add(sceneOptions, "bitmaps", 0, 1000).step(2));
-      c.push(f.add(sceneOptions, "videos", 0, 10).step(1));
+      c.push(f.add(sceneOptions, "bitmaps", 0, 10000).step(2));
+      c.push(f.add(sceneOptions, "videos", 0, 1000).step(1));
       c.push(f.add(sceneOptions, "text", 0, 1000).step(1));
       c.push(f.add(sceneOptions, "cacheAsBitmap"));
       c.push(f.add(sceneOptions, "webGL"));
@@ -224,15 +223,15 @@
 
     var stage, animators;
 
-    var videoElements;
+    var videoElements = [];
 
     function ensureLoadedVideos() {
-      if (videoElements) {
+      if (videoElements.length > 0) {
         return;
       }
-      videoElements = [];
       var urls = [
-        "http://vjs.zencdn.net/v/oceans.webm",
+        // "assets/oceans.webm",
+        "assets/elephants-dream.webm"
         // "http://upload.wikimedia.org/wikipedia/commons/7/79/Big_Buck_Bunny_small.ogv",
         // "http://video.webmfiles.org/elephants-dream.webm",
         // "http://video.webmfiles.org/big-buck-bunny_trailer.webm"
@@ -244,7 +243,15 @@
         videoElement.loop = true;
         videoElement.muted = true;
         videoElements.push(videoElement);
-        // videoElement.play();
+        videoElement.play();
+
+//        videoElement.addEventListener('timeupdate', function() {
+//          var location = videoElement.textureAtlasLocation;
+//          if (location) {
+//            location.atlas.update(videoElement, location.region);
+//          }
+//        }, false);
+
       });
     }
 
@@ -252,11 +259,9 @@
       stage = new Stage(canvas.width, canvas.height);
       animators = [];
 
-      for (var i = 0; i < 10; i++) {
-        var snow = new Snow(sceneOptions.flakes / 10, 32, canvas.width, canvas.height);
-        animators.push(snow);
-        stage.addChild(snow);
-      }
+      var snow = new Snow(sceneOptions.flakes, 32, canvas.width, canvas.height);
+      animators.push(snow);
+      stage.addChild(snow);
 
       for (var i = 0; i < sceneOptions.text; i++) {
         var frame = new Shape(renderTextShape(randomText()), 256, 200, sceneOptions.cacheAsBitmap);
@@ -291,9 +296,8 @@
       for (var i = 0; i < sceneOptions.videos; i++) {
         ensureLoadedVideos();
         var videoElement = videoElements[Math.random() * videoElements.length | 0];
-        videoElement.play();
         var frame = new Video(videoElement);
-        frame.x = Math.random() * 100;
+        frame.x = Math.random() * 1000;
         frame.y = Math.random() * 100;
         frame.alpha = Math.random();
         stage.addChild(frame);
@@ -320,6 +324,18 @@
     var frames = 0;
 
     (function tick() {
+
+      for (var i = 0; i < videoElements.length; i++) {
+        var videoElement = videoElements[i];
+        var location = videoElement.textureAtlasLocation;
+        if (location) {
+          if (videoElement.lastCurrentTime !== videoElement.currentTime) {
+            location.atlas.update(videoElement, location.region);
+          }
+          videoElement.lastCurrentTime = videoElement.currentTime;
+        }
+      }
+
       timelineEnter("FRAME");
       var now = performance.now();
       if (sceneOptions.animate) {

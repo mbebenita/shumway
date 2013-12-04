@@ -21,7 +21,7 @@ module Shumway.Geometry {
     }
 
     toString () {
-      return "{ x: " + this.x + ", y: " + this.y + "}";
+      return "{x: " + this.x + ", y: " + this.y + "}";
     }
 
     static createEmpty(): Point {
@@ -158,6 +158,13 @@ module Shumway.Geometry {
       this.h = y1 - this.y;
     }
 
+    scale (x: number, y: number) {
+      this.x *= x;
+      this.y *= y;
+      this.w *= x;
+      this.h *= y;
+    }
+
     toString(): string {
       return "{" +
         this.x + ", " +
@@ -228,6 +235,14 @@ module Shumway.Geometry {
       var y = rectangle.y;
       var w = rectangle.w;
       var h = rectangle.h;
+
+      /*
+
+      0---1
+      | / |
+      3---2
+
+      */
 
       points[0].x = a + c * y + tx;
       points[0].y = b * x + d * y + ty;
@@ -609,14 +624,15 @@ module Shumway.Geometry {
      */
     static RANDOM_ORIENTATION: boolean = true;
 
-    private root: RectanglePacker.Cell;
-
-    constructor(w: number, h: number) {
-      this.root = new Shumway.Geometry.RectanglePacker.Cell(0, 0, w, h, false);
+    private _root: RectanglePacker.Cell;
+    private _padding: number;
+    constructor(w: number, h: number, padding: number) {
+      this._root = new Shumway.Geometry.RectanglePacker.Cell(0, 0, w, h, false);
+      this._padding = padding;
     }
 
-    public insert(w: number, h: number): Point {
-      return this.root.insert(w, h);
+    public insert(w: number, h: number): Rectangle {
+      return this._root.insert(w + this._padding, h + this._padding);
     }
   }
 
@@ -631,7 +647,7 @@ module Shumway.Geometry {
         this.horizontal = horizontal;
         this.empty = true;
       }
-      insert (w: number, h: number): Point {
+      insert (w: number, h: number): Rectangle {
         if (!this.empty) {
           return;
         }
@@ -657,7 +673,7 @@ module Shumway.Geometry {
           var first = this.children[0];
           if (first.w === w && first.h === h) {
             first.empty = false;
-            return new Point(first.x, first.y);
+            return new Rectangle(first.x, first.y, w, h);
           }
           return this.insert(w, h);
         } else {

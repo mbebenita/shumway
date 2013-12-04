@@ -15,9 +15,16 @@ module Shumway.Layers.Elements {
       super();
       this.radius = radius;
       this.density = density;
-      this.speed = Math.random() < 0.2 ? (Math.random() / 5): 0;
-      this.rotationSpeed = Math.random();
-      this.scaleSpeed = 0.01 + Math.random() / 20;
+      if (Math.random() < 0.9) {
+        this.speed = 0;
+        this.scaleSpeed = 0;
+        this.rotationSpeed = 0;
+      } else {
+        this.speed = Math.random() / 5;
+        this.scaleSpeed = 0.01 + Math.random() / 20;
+        this.rotationSpeed = Math.random();
+      }
+      this.rotation = Math.random() * 180;
     }
     render (context: CanvasRenderingContext2D, options?: any) {
       context.save();
@@ -138,7 +145,7 @@ module Shumway.Layers.Elements {
 
   export class Video extends Frame implements Shumway.IRenderable {
     video: HTMLVideoElement;
-    constructor(video: HTMLVideoElement) {
+    constructor(video: any) {
       super();
       var that = this;
 //      var events = 'loadstart,suspend,abort,error,emptied,stalled,loadedmetadata,loadeddata,canplay,canplaythrough,playing,waiting,seeking,seeked,ended,durationchange,timeupdate,progress,play,pause,ratechange,volumechange'.split(',');

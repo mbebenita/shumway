@@ -1,17 +1,14 @@
 /// <reference path='all.ts'/>
 /// <reference path="WebGL.d.ts" />
 
-interface HTMLImageElement {
-  textureAtlasLocation: Shumway.GL.TextureAtlasLocation
-}
-
 module Shumway.GL {
   var traceLevel = 1;
   enum TraceLevel {
     None,
-    Brief
+    Brief,
+    Verbose,
   }
-  var release = true;
+  var release = false;
   var writer = new IndentingWriter();
 
   import createQuadraticCurveVertices = Shumway.Geometry.Path.createQuadraticCurveVertices;
@@ -24,6 +21,7 @@ module Shumway.GL {
   import Stage = Shumway.Layers.Stage;
   import Bitmap = Shumway.Layers.Elements.Bitmap;
   import Flake = Shumway.Layers.Elements.Flake;
+  import Video = Shumway.Layers.Elements.Video;
 
   var SHADER_ROOT = "shaders/";
 
@@ -126,6 +124,13 @@ module Shumway.GL {
       this.offset = 0;
     }
 
+    getIndex(size) {
+      release || assert (size === 1 || size === 2 || size === 4 || size === 8 || size === 16);
+      var index = this.offset / size;
+      release || assert ((index | 0) === index);
+      return index;
+    }
+
     ensureCapacity(minCapacity: number) {
       if (!this.u8) {
         this.u8 = new Uint8Array(minCapacity);
@@ -188,7 +193,7 @@ module Shumway.GL {
       this.offset += 8;
     }
 
-    writeTriangleIndices(a: number, b: number, c: number) {
+    writeTriangleElements(a: number, b: number, c: number) {
       release || assert ((this.offset & 0x1) === 0);
       this.ensureCapacity(this.offset + 6);
       var index = this.offset >> 1;
@@ -239,12 +244,24 @@ module Shumway.GL {
     }
   }
 
+
+  export class WebGLTextureAtlasLocation {
+    atlas: WebGLTextureAtlas;
+    region: Rectangle;
+    constructor(atlas: WebGLTextureAtlas, region: Rectangle) {
+      this.atlas = atlas;
+      this.region = region;
+    }
+  }
+
   export class WebGLTextureAtlas {
+    texture: WebGLTexture;
+
     private _context: WebGLContext;
-    private _texture: WebGLTexture;
     private _rectanglePacker: RectanglePacker;
     private _w: number;
     private _h: number;
+    private _solitary: boolean;
 
     get w(): number {
       return this._w;
@@ -254,29 +271,32 @@ module Shumway.GL {
       return this._h;
     }
 
-    constructor(context: WebGLContext, texture: WebGLTexture, w: number, h: number) {
+    constructor(context: WebGLContext, w: number, h: number, solitary: boolean = false) {
       this._context = context;
-      this._texture = texture;
+      this.texture = context.createTexture(w, h, null);
       this._w = w;
       this._h = h;
-      this._rectanglePacker = new RectanglePacker(w, h);
+      this._rectanglePacker = new RectanglePacker(w, h, solitary ? 0 : 2);
+      this._solitary = solitary;
     }
 
-    load(image: HTMLImageElement): Point {
+    insert(image: any, w: number, h: number): Rectangle {
       var gl = this._context.gl;
-      var coordinates = this._rectanglePacker.insert(image.width, image.height);
-      if (!coordinates) {
+      var region = this._rectanglePacker.insert(w, h);
+      if (!region) {
         return;
       }
-      gl.bindTexture(gl.TEXTURE_2D, this._texture);
-      gl.texSubImage2D(gl.TEXTURE_2D, 0, coordinates.x, coordinates.y, gl.RGBA, gl.UNSIGNED_BYTE, image);
-      return coordinates;
+      gl.bindTexture(gl.TEXTURE_2D, this.texture);
+      gl.texSubImage2D(gl.TEXTURE_2D, 0, region.x, region.y, gl.RGBA, gl.UNSIGNED_BYTE, image);
+      return region;
     }
-  }
 
-  export interface TextureAtlasLocation {
-    atlas: WebGLTextureAtlas;
-    position: Point;
+    update(image: any, region: Rectangle): Rectangle {
+      var gl = this._context.gl;
+      gl.bindTexture(gl.TEXTURE_2D, this.texture);
+      gl.texSubImage2D(gl.TEXTURE_2D, 0, region.x, region.y, gl.RGBA, gl.UNSIGNED_BYTE, image);
+      return region;
+    }
   }
 
   export class WebGLContext {
@@ -349,26 +369,35 @@ module Shumway.GL {
       this.gl.enable(this.gl.BLEND);
     }
 
-    private loadImage(image: HTMLImageElement) {
-      if (image.textureAtlasLocation) {
-        return image.textureAtlasLocation;
+    private loadImage(image: any, w: number, h: number, solitary: boolean, update: boolean): WebGLTextureAtlasLocation {
+      var location: WebGLTextureAtlasLocation = image.textureAtlasLocation;
+      if (location) {
+        if (update) {
+          location.atlas.update(image, location.region);
+          traceLevel >= TraceLevel.Verbose && writer.writeLn("Updating Image: @ " + location.region);
+        }
+        return location;
       }
-      var textureAtlasPosition, textureAtlas;
-      for (var i = 0; i < this._textureAtlases.length; i++) {
-        textureAtlasPosition = this._textureAtlases[i].load(image);
-        if (textureAtlasPosition) {
-          break;
+      var region: Rectangle, textureAtlas: WebGLTextureAtlas;
+      if (!solitary) {
+        for (var i = 0; i < this._textureAtlases.length; i++) {
+          textureAtlas = this._textureAtlases[i];
+          region = textureAtlas.insert(image, w, h);
+          if (region) {
+            break;
+          }
         }
       }
-      if (!textureAtlasPosition) {
-        assert (this._textureAtlases.length < 4);
-        textureAtlas = new WebGLTextureAtlas(this, this.createTexture(1024, 1024, null), 1024, 1024);
+      if (!region) {
+        var aw = solitary ? w : 1024;
+        var ah = solitary ? h : 1024;
+        textureAtlas = new WebGLTextureAtlas(this, aw, ah, solitary);
         this._textureAtlases.push(textureAtlas);
-        textureAtlasPosition = textureAtlas.load(image);
-        assert (textureAtlasPosition);
+        region = textureAtlas.insert(image, w, h);
+        assert (region);
       }
-      traceLevel >= TraceLevel.Brief && writer.writeLn("Uploading Image: w: " + image.width + ", h: " + image.height + " @ " + textureAtlasPosition);
-      return (image.textureAtlasLocation = {atlas: textureAtlas, position: textureAtlasPosition});
+      traceLevel >= TraceLevel.Verbose && writer.writeLn("Uploading Image: @ " + region);
+      return (image.textureAtlasLocation = new WebGLTextureAtlasLocation(textureAtlas, region));
     }
 
     private freeImage(image: HTMLImageElement) {
@@ -453,7 +482,7 @@ module Shumway.GL {
       return shader;
     }
 
-    private createTexture (w: number, h: number, data): WebGLTexture {
+    createTexture(w: number, h: number, data): WebGLTexture {
       var gl = this.gl;
       var texture = gl.createTexture();
       gl.bindTexture(gl.TEXTURE_2D, texture);
@@ -483,19 +512,20 @@ module Shumway.GL {
     }
 
 
-    private beginFillJob() {
+    private beginJob(type) {
       if (this.currentJob) {
-        if (this.currentJob instanceof Job.Fill) {
+        if (this.currentJob instanceof type) {
           return;
         } else {
           this.currentJob.finish();
         }
       }
-      this._jobQueue.push(new Job.Fill(this, this._geometry, Matrix.createIdentity()));
+      this._geometry.resetElementOffset();
+      this._jobQueue.push(new type(this, this._geometry, Matrix.createIdentity()));
     }
 
     public fillRect(x, y, w, h) {
-      this.beginFillJob();
+      this.beginJob(Job.Fill);
       var r = new Rectangle(x, y, w, h);
       this._state.transform.transformRectangle(r, this._tmpVertices);
       for (var i = 0; i < 4; i++) {
@@ -523,36 +553,41 @@ module Shumway.GL {
       this._state.transform.set(transform)
     }
 
-    public drawImage(image, dx, dy, dw, dh) {
-//      if (!image.complete) {
-//        return;
-//      }
-//      var location: TextureAtlasLocation = this.loadImage(image);
-//      var tw = location.atlas.w;
-//      var th = location.atlas.h;
-//
-//      var x = dx, y = dy, w = image.width, h = image.height;
-//      var r = new Rectangle(x, y, w, h);
-//      this._state.transform.transformRectangle(r, this._tmpVertices);
-//      for (var i = 0; i < 4; i++) {
-//        this._tmpVertices[i].color = this._fillColor;
-//        this._tmpVertices[i].color = Color.None;
-//      }
-//      var p = location.position;
-//      this._tmpVertices[0].coordinate.x = p.x / tw;
-//      this._tmpVertices[0].coordinate.y = p.y / th;
-//
-//      this._tmpVertices[1].coordinate.x = p.x / tw;
-//      this._tmpVertices[1].coordinate.y = (h + p.y) / th;
-//
-//      this._tmpVertices[2].coordinate.x = (w + p.x) / tw;
-//      this._tmpVertices[2].coordinate.y = (h + p.y) / th;
-//
-//      this._tmpVertices[3].coordinate.x = (w + p.x) / tw;
-//      this._tmpVertices[3].coordinate.y = p.y / th;
-//
-//      this._geometry.addVertices(this._tmpVertices);
-//      this._geometry.addQuad();
+    public drawImage(image, w: number, h: number, solitary: boolean = false, update: boolean = false) {
+
+      var location: WebGLTextureAtlasLocation = this.loadImage(image, w, h, solitary, update);
+
+      var createNewJob = true;
+      if (this.currentJob instanceof Job.FillTexture) {
+        var currentJob = <Job.FillTexture>this.currentJob;
+        if (!currentJob.canDraw([location.atlas.texture])) {
+          createNewJob = false;
+        }
+      }
+
+      if (createNewJob) {
+        if (this.currentJob) {
+          this.currentJob.finish();
+        }
+        this._geometry.resetElementOffset();
+        this._jobQueue.push(new Job.FillTexture(this, this._geometry, Matrix.createIdentity(), [location.atlas.texture]));
+      }
+
+
+      var t = location.region.clone();
+      t.scale(1 / location.atlas.w, 1 / location.atlas.h);
+      var r = new Rectangle(0, 0, w, h);
+      this._state.transform.transformRectangle(r, this._tmpVertices);
+      this._tmpVertices[0].coordinate.x = t.x;
+      this._tmpVertices[0].coordinate.y = t.y;
+      this._tmpVertices[1].coordinate.x = t.x + t.w;
+      this._tmpVertices[1].coordinate.y = t.y;
+      this._tmpVertices[2].coordinate.x = t.x + t.w;
+      this._tmpVertices[2].coordinate.y = t.y + t.h;
+      this._tmpVertices[3].coordinate.x = t.x;
+      this._tmpVertices[3].coordinate.y = t.y + t.h;
+      this._geometry.addVertices(this._tmpVertices, 4);
+      this._geometry.addQuad();
     }
 
     public beginPath() {
@@ -582,6 +617,10 @@ module Shumway.GL {
 
     flush (draw: boolean) {
       this._geometry.uploadBuffers();
+      if (this.currentJob) {
+        this.currentJob.finish();
+      }
+      console.info("Render Jobs: " + this._jobQueue.length);
       while (this._jobQueue.length) {
         this._jobQueue.shift().draw(draw);
       }
@@ -599,16 +638,28 @@ module Shumway.GL {
       stage.visit(function (frame: Frame, transform?: Matrix) {
         that.context.setTransform(transform);
         if (frame instanceof Bitmap) {
-          // that.renderBitmap(<Bitmap>frame, transform);
+          that.renderBitmap(<Bitmap>frame, transform);
         } else if (frame instanceof Flake) {
           that.renderFlake(<Flake>frame, transform);
+        } else if (frame instanceof Video) {
+          that.renderVideo(<Video>frame, transform);
         }
       }, stage.transform);
       this.context.flush(draw);
     }
 
-    renderBitmap(bitmap: Bitmap, transform: Matrix) {
-      this.context.drawImage(bitmap.image, 0, 0, 0, 0);
+    renderBitmap(source: Bitmap, transform: Matrix) {
+      if (!source.image.complete) {
+        return;
+      }
+      this.context.drawImage(source.image, source.image.width, source.image.height);
+    }
+
+    renderVideo(source: Video, transform: Matrix) {
+      if (!(source.video.videoWidth && source.video.videoHeight)) {
+        return;
+      }
+      this.context.drawImage(source.video, source.video.videoWidth, source.video.videoHeight, true);
     }
 
     renderFlake(flake: Flake, transform: Matrix) {
@@ -617,39 +668,84 @@ module Shumway.GL {
     }
   }
 
+  export class WebGLGeometryPosition {
+    color: number;
+    element : number;
+    vertex : number;
+    coordinate: number;
+    triangles: number;
+    constructor(triangles, element, vertex, coordinate, color) {
+      this.triangles = triangles;
+      this.element = element;
+      this.vertex = vertex;
+      this.coordinate = coordinate;
+      this.color = color;
+    }
+    toString() {
+      return "{" +
+        "triangles: " + this.triangles + ", " +
+        "element: " + this.element + ", " +
+        "vertex: " + this.vertex + ", " +
+        "coordinate: " + this.coordinate + ", " +
+        "color: " + this.color + "}";
+    }
+  }
+
   export class WebGLGeometry {
     context: WebGLContext;
-    indices: BufferWriter;
+
+    elements: BufferWriter;
+    elementBuffer: WebGLBuffer;
+
     vertices: BufferWriter;
-    coordinates: BufferWriter;
-    colors: BufferWriter;
-    indexBuffer: WebGLBuffer;
     vertexBuffer: WebGLBuffer;
-    coordinatesBuffer: WebGLBuffer;
+
+    coordinates: BufferWriter;
+    coordinateBuffer: WebGLBuffer;
+
+    colors: BufferWriter;
     colorBuffer: WebGLBuffer;
-    vertexCount: number = 0;
-    vertexOffset: number = 0;
+
     triangleCount: number = 0;
+
+    private _elementOffset: number = 0;
+
 
     constructor(context) {
       this.context = context;
-      this.indices = new BufferWriter(8);
-      this.vertices = new BufferWriter(8);
-      this.coordinates = new BufferWriter(8);
-      this.colors = new BufferWriter(8);
 
-      this.indexBuffer = context.gl.createBuffer();
-      this.vertexBuffer = context.gl.createBuffer();
-      this.coordinatesBuffer = context.gl.createBuffer();
+      this.colors = new BufferWriter(8);
+      this.vertices = new BufferWriter(8);
+      this.elements = new BufferWriter(8);
+      this.coordinates = new BufferWriter(8);
+
       this.colorBuffer = context.gl.createBuffer();
+      this.vertexBuffer = context.gl.createBuffer();
+      this.elementBuffer = context.gl.createBuffer();
+      this.coordinateBuffer = context.gl.createBuffer();
+    }
+
+    public getPosition(): WebGLGeometryPosition {
+      return new WebGLGeometryPosition (
+        this.triangleCount,
+        this.elements.offset,
+        this.vertices.offset,
+        this.coordinates.offset,
+        this.colors.offset
+      );
     }
 
     public clear() {
-      this.indices.reset();
+      this.elements.reset();
       this.vertices.reset();
       this.coordinates.reset();
       this.colors.reset();
-      this.triangleCount = this.vertexCount = this.vertexOffset = 0;
+      this.triangleCount = 0;
+      this.resetElementOffset();
+    }
+
+    public resetElementOffset() {
+      this._elementOffset = 0;
     }
 
     public addVertices(vertices: Vertex [], count: number = vertices.length) {
@@ -662,24 +758,21 @@ module Shumway.GL {
         this.coordinates.writeVertexUnsafe(vertex.coordinate.x, vertex.coordinate.y);
         this.colors.writeColorUnsafe(vertex.color.r, vertex.color.g, vertex.color.b, vertex.color.a);
       }
-      this.vertexCount += count;
     }
 
     public addQuad() {
-      assert (this.vertexOffset + 3 < this.vertexCount);
-      var offset = this.vertexOffset;
-      this.indices.writeTriangleIndices(offset, offset + 1, offset + 2);
-      this.indices.writeTriangleIndices(offset, offset + 2, offset + 3);
+      var offset = this._elementOffset;
+      this.elements.writeTriangleElements(offset, offset + 1, offset + 2);
+      this.elements.writeTriangleElements(offset, offset + 2, offset + 3);
       this.triangleCount += 2;
-      this.vertexOffset += 4;
+      this._elementOffset += 4;
     }
 
     public addTriangle(a: number, b: number, c: number) {
-      assert (this.vertexOffset + 3 < this.vertexCount);
-      var offset = this.vertexOffset;
-      this.indices.writeTriangleIndices(offset + a, offset + b, offset + c);
+      var offset = this._elementOffset;
+      this.elements.writeTriangleElements(offset + a, offset + b, offset + c);
       this.triangleCount ++;
-      this.vertexOffset += 3;
+      this._elementOffset += 3;
     }
 
     public uploadBuffers() {
@@ -690,14 +783,14 @@ module Shumway.GL {
       var colors = this.colors.subF32View();
       assert (vertices.length === coordinates.length);
       assert (vertices.length * 2 === colors.length);
-      var indices = this.indices.subU16View();
+      var elements = this.elements.subU16View();
       assert ((vertices.length % 2) === 0);
-      assert ((indices.length % 3) === 0);
+      assert ((elements.length % 3) === 0);
 
       if (!release) {
-        for (var i = 0; i < indices.length; i++) {
-          var index = indices[i];
-          assert (index >= 0 && index < vertices.length);
+        for (var i = 0; i < elements.length; i++) {
+          var element = elements[i];
+          assert (element >= 0 && element < vertices.length);
         }
       }
 
@@ -706,98 +799,100 @@ module Shumway.GL {
       gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
       gl.bufferData(gl.ARRAY_BUFFER, vertices, usage);
 
-      gl.bindBuffer(gl.ARRAY_BUFFER, this.coordinatesBuffer);
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.coordinateBuffer);
       gl.bufferData(gl.ARRAY_BUFFER, coordinates, usage);
 
       gl.bindBuffer(gl.ARRAY_BUFFER, this.colorBuffer);
       gl.bufferData(gl.ARRAY_BUFFER, colors, usage);
 
-      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
-      gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, usage);
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.elementBuffer);
+      gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, elements, usage);
     }
   }
 
   class Job {
     context: WebGLContext;
-    constructor(context: WebGLContext) {
-      this.context = context;
-    }
-    draw(draw: boolean) {
+    program: WebGLProgram;
+    transform: Matrix;
+    geometry: WebGLGeometry;
+    beginPosition: WebGLGeometryPosition;
+    endPosition: WebGLGeometryPosition;
 
+    constructor(context: WebGLContext, geometry: WebGLGeometry, transform: Matrix) {
+      this.context = context;
+      this.geometry = geometry;
+      this.transform = transform;
+      this.beginPosition = geometry.getPosition();
     }
+
+    draw(draw: boolean) {
+      var g = this.geometry;
+      var gl = this.context.gl;
+      gl.useProgram(this.program);
+      gl.uniform1f(this.program.uniforms.uZ.location, 1);
+      gl.uniformMatrix3fv(this.program.uniforms.uTransformMatrix.location, false, this.transform.toWebGLMatrix());
+
+      gl.bindBuffer(gl.ARRAY_BUFFER, g.vertexBuffer);
+      var position = this.program.attributes.aPosition.location;
+      gl.enableVertexAttribArray(position);
+      gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, this.beginPosition.vertex);
+
+      gl.bindBuffer(gl.ARRAY_BUFFER, g.coordinateBuffer);
+      var coordinate = this.program.attributes.aCoordinate.location;
+      gl.enableVertexAttribArray(coordinate);
+      gl.vertexAttribPointer(coordinate, 2, gl.FLOAT, false, 0, this.beginPosition.coordinate);
+
+      gl.bindBuffer(gl.ARRAY_BUFFER, g.colorBuffer);
+      var color = this.program.attributes.aColor.location;
+      gl.enableVertexAttribArray(color);
+      gl.vertexAttribPointer(color, 4, gl.FLOAT, false, 0, this.beginPosition.color);
+
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, g.elementBuffer);
+
+      var triangles = this.endPosition.triangles - this.beginPosition.triangles;
+      gl.drawElements(gl.TRIANGLES, triangles * 3, gl.UNSIGNED_SHORT, this.beginPosition.element);
+    }
+
     finish() {
-      notImplemented("finish");
+      this.endPosition = this.geometry.getPosition();
     }
   }
 
   module Job {
     export class Fill extends Job {
-      program: WebGLProgram;
-      geometry: WebGLGeometry;
-      transform: Matrix;
       constructor(context: WebGLContext, geometry: WebGLGeometry, transform: Matrix) {
-        super(context);
+        super(context, geometry, transform);
         this.program = context.createProgramFromFiles("canvas.vert", "solid-fill.frag");
-        this.geometry = geometry;
-        this.transform = transform;
-      }
-      draw(draw: boolean) {
-        var g = this.geometry;
-        var gl = this.context.gl;
-        gl.useProgram(this.program);
-        gl.uniform1f(this.program.uniforms.uZ.location, 1);
-        gl.uniformMatrix3fv(this.program.uniforms.uTransformMatrix.location, false, this.transform.toWebGLMatrix());
-        gl.bindBuffer(gl.ARRAY_BUFFER, g.vertexBuffer);
-        var position = this.program.attributes.aPosition.location;
-        gl.enableVertexAttribArray(position);
-        gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0);
-        gl.bindBuffer(gl.ARRAY_BUFFER, g.coordinatesBuffer);
-        var coordinate = this.program.attributes.aCoordinate.location;
-        gl.enableVertexAttribArray(coordinate);
-        gl.vertexAttribPointer(coordinate, 2, gl.FLOAT, false, 0, 0);
-        gl.bindBuffer(gl.ARRAY_BUFFER, g.colorBuffer);
-        var color = this.program.attributes.aColor.location;
-        gl.enableVertexAttribArray(color);
-        gl.vertexAttribPointer(color, 4, gl.FLOAT, false, 0, 0);
-        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, g.indexBuffer);
-
-        if (draw) {
-          gl.drawElements(gl.TRIANGLES, g.triangleCount * 3, gl.UNSIGNED_SHORT, 0);
-        }
       }
     }
 
-    export class Draw extends Job {
-      program: WebGLProgram;
-      geometry: WebGLGeometry;
-      transform: Matrix;
-      constructor(context: WebGLContext, geometry: WebGLGeometry, transform: Matrix) {
-        super(context);
+    export class FillTexture extends Job {
+      textures: WebGLTexture [];
+      constructor(context: WebGLContext, geometry: WebGLGeometry, transform: Matrix, textures: WebGLTexture []) {
+        super(context, geometry, transform);
         this.program = context.createProgramFromFiles("canvas.vert", "identity.frag");
-        this.geometry = geometry;
         this.transform = transform;
+        this.textures = textures;
       }
-      draw(draw: boolean) {
-        var g = this.geometry;
-        var gl = this.context.gl;
-        gl.useProgram(this.program);
-        gl.uniform1f(this.program.uniforms.uZ.location, 1);
-        gl.uniformMatrix3fv(this.program.uniforms.uTransformMatrix.location, false, this.transform.toWebGLMatrix());
-        gl.bindBuffer(gl.ARRAY_BUFFER, g.vertexBuffer);
-        var position = this.program.attributes.aPosition.location;
-        gl.enableVertexAttribArray(position);
-        gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0);
-        gl.bindBuffer(gl.ARRAY_BUFFER, g.coordinatesBuffer);
-        var coordinate = this.program.attributes.aCoordinate.location;
-        gl.enableVertexAttribArray(coordinate);
-        gl.vertexAttribPointer(coordinate, 2, gl.FLOAT, false, 0, 0);
-        gl.bindBuffer(gl.ARRAY_BUFFER, g.colorBuffer);
-        var color = this.program.attributes.aColor.location;
-        gl.enableVertexAttribArray(color);
-        gl.vertexAttribPointer(color, 4, gl.FLOAT, false, 0, 0);
-        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, g.indexBuffer);
 
-        gl.drawElements(gl.TRIANGLES, g.triangleCount * 3, gl.UNSIGNED_SHORT, 0);
+      draw(draw: boolean) {
+        var gl = this.context.gl;
+        for (var i = 0; i < this.textures.length; i++) {
+          gl.bindTexture(gl.TEXTURE_2D, this.textures[i]);
+        }
+        super.draw(draw);
+      }
+
+      canDraw(textures: WebGLTexture []): boolean {
+        if (this.textures.length !== textures.length) {
+          return false;
+        }
+        for (var i = 0; i < this.textures.length; i++) {
+          if (this.textures[i] === textures[i]) {
+            return false;
+          }
+        }
+        return true;
       }
     }
   }
