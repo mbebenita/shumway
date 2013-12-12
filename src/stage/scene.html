@@ -21,18 +21,22 @@
   <script src="geometry.js"></script>
   <script src="stage.js"></script>
   <script src="elements.js"></script>
+  <script src="filters.js"></script>
   <script src="gl.js"></script>
+  <script src="gl/core.js"></script>
   <script>
     var Point = Shumway.Geometry.Point;
     var Rectangle = Shumway.Geometry.Rectangle;
     var Matrix = Shumway.Geometry.Matrix;
     var Stage = Shumway.Layers.Stage;
     var Snow = Shumway.Layers.Elements.Snow;
+    var Flake = Shumway.Layers.Elements.Flake;
     var Bitmap = Shumway.Layers.Elements.Bitmap;
     var Video = Shumway.Layers.Elements.Video;
     var Text = Shumway.Layers.Elements.Text;
     var Shape = Shumway.Layers.Elements.Shape;
     var Slider = Shumway.Layers.Elements.Slider;
+    var BlurFilter = Shumway.Layers.BlurFilter;
     var WebGLContext = Shumway.GL.WebGLContext;
     var WebGLStageRenderer = Shumway.GL.WebGLStageRenderer;
   </script>
@@ -67,7 +71,7 @@
     <!--<video id="video" src="http://upload.wikimedia.org/wikipedia/commons/4/41/Big_Buck_Bunny_medium.ogv" controls="true"></video>-->
     <!--<video id="video" src="http://upload.wikimedia.org/wikipedia/commons/7/79/Big_Buck_Bunny_small.ogv" controls="true"></video>-->
     <!--<canvas id="stageCanvas" width="512" height="256" style="background-color: #1F1F21;"></canvas>-->
-    <canvas id="stageCanvas" width="2048" height="1024" style="background-color: #1F1F21;"></canvas>
+    <canvas id="stageCanvas" style="background-color: #1F1F21;"></canvas>
     <!--<canvas id="stageCanvas" style="background-color: #1F1F21;"></canvas>-->
   </div>
   <script>
@@ -79,16 +83,18 @@
         var w = 128, h = 128;
         var x = Math.max(0, Math.random() * (canvas.width - w));
         var y = Math.max(0, Math.random() * (canvas.height - h));
-        var s = 0.25 + Math.random() * 2;
-        // var s = (Math.random() - 0.5) * 10;
+        var s = 0.5;
+        // var s = 0.25 + Math.random() * 1;
+        // var s = (Math.random() - 0.5) * 4;
         tween.easing(easing);
         tween.delay(Math.random() * (500000 / sceneOptions.movement));
         tween.to({
           x: x,
           y: y,
           scaleX: s,
-          scaleY: s
-          // rotation: (Math.random() - 0.5) * 180
+          scaleY: s,
+          rotation: (Math.random() - 0.5) * 180,
+          alpha: Math.random()
         }, 100000 / sceneOptions.speed).start();
 //        if (Math.random() < 0.1) {
 //          tween.stop();
@@ -125,9 +131,13 @@
     var canvas = document.getElementById("stageCanvas");
 
     var pixelRatio = 'devicePixelRatio' in window ? window.devicePixelRatio : 1;
+    // var pixelRatio = 1;
 
     var width = window.innerWidth * 0.75 | 0;
-    var height = width / 2 | 0;
+    var height = window.innerHeight * 0.75 | 0;
+
+//    var width = 512;
+//    var height = 512;
 
     canvas.style.width = width + 'px';
     canvas.style.height = height + 'px';
@@ -148,6 +158,8 @@
 
       movement: 20,
       speed: 20,
+      redraw: 1,
+      useStencil: true,
       render: true,
       animate: true,
       drawElements: true,
@@ -187,6 +199,8 @@
       var c = [];
       c.push(f.add(sceneOptions, "movement", 1, 1000).step(1));
       c.push(f.add(sceneOptions, "speed", 0.1, 200).step(0.1));
+      c.push(f.add(sceneOptions, "redraw", 0, 200).step(1));
+      c.push(f.add(sceneOptions, "useStencil"));
       c.push(f.add(sceneOptions, "frameRate", 1, 60).step(1));
       c.push(f.add(sceneOptions, "render"));
       c.push(f.add(sceneOptions, "drawElements"));
@@ -226,6 +240,7 @@
     var videoElements = [];
 
     function ensureLoadedVideos() {
+      return;
       if (videoElements.length > 0) {
         return;
       }
@@ -259,7 +274,7 @@
       stage = new Stage(canvas.width, canvas.height);
       animators = [];
 
-      var snow = new Snow(sceneOptions.flakes, 32, canvas.width, canvas.height);
+      var snow = new Snow(sceneOptions.flakes, 16, canvas.width, canvas.height);
       animators.push(snow);
       stage.addChild(snow);
 
@@ -289,6 +304,14 @@
         frame.x = (Math.random()) * canvas.width;
         frame.y = (Math.random()) * canvas.height;
         frame.alpha = Math.random();
+        if (false || Math.random() < 0.5) {
+          frame.filters = [new BlurFilter(10, 10)];
+        }
+        if (Math.random() < 0.1) {
+          frame.mask = new Flake(20, 20);
+          frame.mask.x = 10;
+          frame.mask.y = 10;
+        }
         stage.addChild(frame);
         shuffle(frame, TWEEN.Easing.Exponential.Out);
       }
@@ -315,11 +338,13 @@
 
     var mousePosition;
 
+    /*
     window.requestAnimationFrame = (function(){
       return function(callback) {
         window.setTimeout(callback, 1000 / sceneOptions.frameRate);
       };
     })();
+    */
 
     var frames = 0;
 
@@ -359,7 +384,7 @@
           context.flush();
           */
 
-          renderer.render(stage, sceneOptions.drawElements);
+          renderer.render(stage, sceneOptions);
         } else {
           if (sceneOptions.clear) {
             context.fillStyle = "#1F1F21";

@@ -1,8 +1,10 @@
 /// <reference path='geometry.ts'/>
 /// <reference path='stage.ts'/>
+/// <reference path='filters.ts'/>
 /// <reference path='elements.ts'/>
 /// <reference path='util.ts'/>
 /// <reference path='gl.ts'/>
+/// <reference path='gl/core.ts'/>
 
 declare function randomStyle(): string;
 declare function assert(...args : any[]);
@@ -17,6 +19,17 @@ declare class IndentingWriter {
   leave(str: string);
   indent(str: string);
   outdent(str: string);
+}
+
+interface WebGLFramebuffer {
+  texture: WebGLTexture;
+}
+
+interface WebGLTexture {
+  w: number;
+  h: number;
+  atlas: Shumway.GL.WebGLTextureAtlas;
+  framebuffer: WebGLFramebuffer;
 }
 
 module Shumway {

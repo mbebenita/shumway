@@ -121,10 +121,10 @@ module Shumway.Layers.Elements {
         this.h = image.height;
       } else {
         var thisFrame = this;
-        image.onload = function () {
+        image.addEventListener("load", function () {
           thisFrame.w = image.width;
           thisFrame.h = image.height;
-        }
+        });
       }
     }
     render (context: CanvasRenderingContext2D, options?: any) {

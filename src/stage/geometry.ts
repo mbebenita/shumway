@@ -213,7 +213,7 @@ module Shumway.Geometry {
       return new Matrix(this.a, this.b, this.c, this.d, this.tx, this.ty);
     }
 
-    transform (a: number, b: number, c: number, d: number, tx: number, ty: number) {
+    transform (a: number, b: number, c: number, d: number, tx: number, ty: number): Matrix  {
       var _a = this.a, _b = this.b, _c = this.c, _d = this.d, _tx = this.tx, _ty = this.ty;
       this.a =  _a * a + _c * b;
       this.b =  _b * a + _d * b;
@@ -221,6 +221,7 @@ module Shumway.Geometry {
       this.d =  _b * c + _d * d;
       this.tx = _a * tx + _c * ty + _tx;
       this.ty = _b * tx + _d * ty + _ty;
+      return this;
     }
 
     transformRectangle (rectangle: Rectangle, points: Point[]) {
@@ -244,7 +245,7 @@ module Shumway.Geometry {
 
       */
 
-      points[0].x = a + c * y + tx;
+      points[0].x = a * x + c * y + tx;
       points[0].y = b * x + d * y + ty;
       points[1].x = a * (x + w) + c * y + tx;
       points[1].y = b * (x + w) + d * y + ty;
@@ -267,7 +268,7 @@ module Shumway.Geometry {
       var w = rectangle.w;
       var h = rectangle.h;
 
-      var x0 = a + c * y + tx;
+      var x0 = a * x + c * y + tx;
       var y0 = b * x + d * y + ty;
       var x1 = a * (x + w) + c * y + tx;
       var y1 = b * (x + w) + d * y + ty;
@@ -294,16 +295,17 @@ module Shumway.Geometry {
       rectangle.h = (y1 > y3 ? y1 : y3) - rectangle.y;
     }
 
-    scale (x: number, y: number) {
+    scale (x: number, y: number): Matrix  {
       this.a *= x;
       this.b *= y;
       this.c *= x;
       this.d *= y;
       this.tx *= x;
       this.ty *= y;
+      return this;
     }
 
-    rotate (angle: number) {
+    rotate (angle: number): Matrix {
       var a = this.a, b = this.b, c = this.c, d = this.d, tx = this.tx, ty = this.ty;
       var cos = Math.cos(angle);
       var sin = Math.sin(angle);
@@ -313,6 +315,7 @@ module Shumway.Geometry {
       this.d  = sin * c  + cos * d;
       this.tx = cos * tx - sin * ty;
       this.ty * sin * tx + cos * ty;
+      return this;
     }
 
     concat (other: Matrix) {
@@ -340,9 +343,10 @@ module Shumway.Geometry {
       this.ty = ty;
     }
 
-    translate (x: number, y: number) {
+    translate (x: number, y: number): Matrix {
       this.tx += x;
       this.ty += y;
+      return this;
     }
 
     setIdentity () {
@@ -756,7 +760,7 @@ module Shumway.Geometry {
       var ARC                 = 0x06;
       var ELLIPSE             = 0x07;
       function path() {
-        this._buffer = new Shumway.Util.BufferWriter(1024);
+        this._buffer = new Shumway.Util.ByteArray(1024);
         this._x = 0;
         this._y = 0;
       }

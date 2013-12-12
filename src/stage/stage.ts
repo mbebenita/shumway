@@ -4,6 +4,7 @@ module Shumway.Layers {
   import Point = Shumway.Geometry.Point;
   import Matrix = Shumway.Geometry.Matrix;
   import DirtyRegion = Shumway.Geometry.DirtyRegion;
+  import Filter = Shumway.Layers.Filter;
 
   export class Frame implements Shumway.IRenderable {
     private _x: number;
@@ -97,10 +98,13 @@ module Shumway.Layers {
     public parent: Frame;
     public isInvalid: boolean;
     public origin: Point = new Point(0, 0);
+    public filters: Filter [];
+    public mask: Frame;
 
     constructor () {
       this.parent = null;
       this.transform = Matrix.createIdentity();
+      this.filters = null;
     }
 
     get stage(): Stage {
@@ -166,14 +170,6 @@ module Shumway.Layers {
         }
       } else {
         notImplemented();
-//        stack = [this];
-//        while (stack.length > 0) {
-//          frame = stack.pop();
-//          for (var i = frame.children.length - 1; i >= 0; i--) {
-//            stack.push(frame.children[i]);
-//          }
-//          visitor(frame);
-//        }
       }
     }
   }
@@ -241,7 +237,7 @@ module Shumway.Layers {
       }
     }
 
-    gatherDirtyRegions() {
+    gatherDirtyRegions(rectangles?: Rectangle[]) {
       var that = this;
       // Find all invalid frames.
       this.visit(function (frame: Frame, transform?: Matrix) {
@@ -252,6 +248,9 @@ module Shumway.Layers {
           frame.isInvalid = false;
         }
       }, this.transform);
+      if (rectangles) {
+        this.dirtyRegion.gatherRegions(rectangles);
+      }
     }
 
     gatherFrames() {
