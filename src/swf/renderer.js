@@ -27,6 +27,10 @@ var showQuadTree = rendererOptions.register(new Option("qt", "showQuadTree", "bo
 var turboMode = rendererOptions.register(new Option("", "turbo", "boolean", false, "turbo mode"));
 var forceHidpi = rendererOptions.register(new Option("", "forceHidpi", "boolean", false, "force hidpi"));
 
+var disableShapes = rendererOptions.register(new Option("", "disableShapes", "boolean", false, "disable shape drawing"));
+var disableBitmaps = rendererOptions.register(new Option("", "disableBitmaps", "boolean", false, "disable bitmap drawing"));
+var disableText = rendererOptions.register(new Option("", "disableText", "boolean", false, "disable text drawing"));
+var disablePixelSnapping = rendererOptions.register(new Option("", "disablePixelSnapping", "boolean", false, "disable pixel snapping"));
 
 var enableConstructChildren = rendererOptions.register(new Option("", "constructChildren", "boolean", true, "Construct Children"));
 var enableEnterFrame = rendererOptions.register(new Option("", "enterFrame", "boolean", true, "Enter Frame"));
@@ -827,14 +831,15 @@ function renderStage(stage, ctx, events) {
 
         traceRenderer.value && frameWriter.enter("> Invalidation");
         timelineEnter("INVALIDATE");
-        invalidPath = stage._processInvalidations(true);
+        invalidPath = stage._processInvalidations();
         timelineLeave("INVALIDATE");
         traceRenderer.value && frameWriter.leave("< Invalidation");
 
         if (!disableRenderVisitor.value) {
           timelineEnter("RENDER");
           traceRenderer.value && frameWriter.enter("> Rendering");
-          (new RenderVisitor(stage, ctx, invalidPath, refreshStage)).start();
+          //(new RenderVisitor(stage, ctx, invalidPath, refreshStage)).start();
+          stage._render(ctx, invalidPath);
           traceRenderer.value && frameWriter.leave("< Rendering");
           timelineLeave("RENDER");
         }

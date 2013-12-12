@@ -46,6 +46,8 @@ var StageDefinition = (function () {
       this._mouseEvents = [];
       this._cursor = 'auto';
 
+      this._displayList = [];
+
       this._concatenatedTransform.invalid = false;
     },
 
@@ -98,6 +100,8 @@ var StageDefinition = (function () {
       var invalidRegions = this._invalidRegions;
       var stack = this._children.slice();
       var zindex = 0;
+
+      var displayList = this._displayList;
 
       stack.reverse();
 
@@ -168,6 +172,8 @@ var StageDefinition = (function () {
           {
             invalidRegions.insert(currentRegion);
           }
+
+          displayList.push(node);
         }
 
         if (hidden) {
@@ -204,7 +210,13 @@ var StageDefinition = (function () {
         var intersectees = qtree.retrieve(xMin, xMax, yMin, yMax);
         for (var j = 0; j < intersectees.length; j++) {
           var item = intersectees[j];
+
+          if (item.obj._invalid) {
+            continue;
+          }
+
           item.obj._invalid = true;
+          displayList.push(item.obj);
         }
 
         invalidPath.rect(xMin, yMin, xMax - xMin, yMax - yMin);
@@ -213,6 +225,93 @@ var StageDefinition = (function () {
       invalidRegions.reset();
 
       return invalidPath;
+    },
+
+    _render: function (ctx, invalidPath) {
+      ctx.save();
+
+      if (invalidPath) {
+        invalidPath.draw(ctx);
+        ctx.clip();
+      }
+
+      var bgcolor = this._color;
+      if (bgcolor) {
+        if (bgcolor.alpha < 255) {
+          ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+        }
+        if (bgcolor.alpha > 0) {
+          ctx.fillStyle = rgbaObjToStr(bgcolor);
+          if (this.invalidPath) {
+            ctx.fill();
+          } else {
+            ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+          }
+        }
+      }
+
+      ctx.mozFillRule = 'evenodd';
+
+      var colorTransform = new RenderingColorTransform();
+
+      var displayList = this._displayList;
+      displayList.sort(sortByZindex);
+      for (var i = 0; i < displayList.length; i++) {
+        var displayObject = displayList[i];
+
+        var m = displayObject._concatenatedTransform;
+        ctx.setTransform(m.a, m.b, m.c, m.d, m.tx/20, m.ty/20);
+        //if (m) {
+        //  if (m.a * m.d == m.b * m.c) {
+        //    // Workaround for bug 844184 -- the object is invisible
+        //    ctx.closePath();
+        //    ctx.rect(0, 0, 0, 0);
+        //    ctx.clip();
+        //  } else {
+        //    ctx.transform(m.a, m.b, m.c, m.d, m.tx/20, m.ty/20);
+        //  }
+        //}
+
+        //if (!renderAsWireframe.value) {
+
+          //if (displayObject._alpha !== 1) {
+          //  ctx.globalAlpha = displayObject._alpha;
+          //}
+
+          // TODO: move into Graphics class
+          if (displayObject._graphics) {
+            var graphics = displayObject._graphics;
+
+            if (graphics._bitmap) {
+              ctx.save();
+              ctx.translate(displayObject._bbox.xMin/20, displayObject._bbox.yMin/20);
+              //context.colorTransform.setAlpha(ctx, true);
+              ctx.drawImage(graphics._bitmap, 0, 0);
+              ctx.restore();
+            } else {
+              if (!disableShapes.value) {
+                graphics.draw(ctx, false, 0, colorTransform);
+              }
+            }
+          }
+
+          if (displayObject.draw) {
+            displayObject.draw(ctx, 0, colorTransform);
+          }
+
+        //}
+
+        displayObject._invalid = false;
+      }
+      displayList.length = 0;
+
+      ctx.restore();
+
+      if (showRedrawRegions.value) {
+        ctx.strokeStyle = 'red';
+        invalidPath.draw(ctx);
+        ctx.stroke();
+      }
     },
 
     _handleMouseButtons: function () {

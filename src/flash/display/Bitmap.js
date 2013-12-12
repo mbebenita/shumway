@@ -50,13 +50,17 @@ var BitmapDefinition = (function () {
     // (bitmapData:BitmapData = null, pixelSnapping:String = "auto", smoothing:Boolean = false)
     __class__: "flash.display.Bitmap",
     draw: function(ctx, ratio, colorTransform) {
+      if (disableBitmaps.value) {
+        return;
+      }
+
       if (!this._bitmapData) {
         return;
       }
       var scaledImage;
       ctx.save();
-      if (this._pixelSnapping === 'auto' || this._pixelSnapping === 'always') {
-        var transform = this._getConcatenatedTransform(null, true);
+      if (!disablePixelSnapping.value && this._pixelSnapping === 'auto' || this._pixelSnapping === 'always') {
+        var transform = this._concatenatedTransform;
         var EPSILON = 0.001;
         var aInt = Math.abs(Math.round(transform.a));
         var dInt = Math.abs(Math.round(transform.d));
@@ -92,7 +96,7 @@ var BitmapDefinition = (function () {
         // TODO this._pixelSnapping === 'always'; does it even make sense in other cases?
       }
 
-      colorTransform.setAlpha(ctx, true);
+      //colorTransform.setAlpha(ctx, true);
       ctx.imageSmoothingEnabled = ctx.mozImageSmoothingEnabled =
                                   this._smoothing;
       ctx.drawImage(scaledImage || this._bitmapData._getDrawable(), 0, 0);

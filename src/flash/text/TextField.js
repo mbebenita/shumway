@@ -597,6 +597,10 @@ var TextFieldDefinition = (function () {
     },
 
     draw: function (ctx, ratio, colorTransform) {
+      if (disableText.value) {
+        return;
+      }
+
       this.ensureDimensions();
       var bounds = this._bbox;
       var width = bounds.xMax / 20;
