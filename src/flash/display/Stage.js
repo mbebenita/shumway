@@ -15,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-/*global QuadTree, ShapePath, sortByDepth */
+/*global QuadTree, ShapePath, sortByZindex */
 
 var StageDefinition = (function () {
   return {
@@ -40,11 +40,13 @@ var StageDefinition = (function () {
       this._wmodeGPU = false;
       this._root = null;
       this._qtree = null;
-      this._invalidObjects = [];
+      this._invalidRegions = new RegionCluster();
       this._mouseMoved = false;
       this._mouseTarget = this;
       this._mouseEvents = [];
       this._cursor = 'auto';
+
+      this._displayList = [];
 
       this._concatenatedTransform.invalid = false;
     },
@@ -60,7 +62,7 @@ var StageDefinition = (function () {
       var parent = displayObject._parent;
       displayObject._level = parent._level + 1;
 
-      this._invalidateOnStage(displayObject);
+      displayObject._invalid = true;
 
       var children = displayObject._children;
       for (var i = 0; i < children.length; i++) {
@@ -86,120 +88,230 @@ var StageDefinition = (function () {
       displayObject._stage = null;
       displayObject._level = -1;
 
-      this._invalidateOnStage(displayObject);
+      if (displayObject._region) {
+        this._qtree.remove(displayObject._region);
+        this._invalidRegions.insert(displayObject._region);
+        displayObject._region = null;
+      }
     },
 
-    _invalidateOnStage: function invalidateOnStage(displayObject) {
-      if (displayObject._invalid) {
-        return;
-      }
+    _processInvalidations: function processInvalidations() {
+      var qtree = this._qtree;
+      var invalidRegions = this._invalidRegions;
+      var stack = this._children.slice();
+      var zindex = 0;
 
-      displayObject._invalid = true;
+      var displayList = this._displayList;
 
-      this._invalidObjects.push(displayObject);
-    },
+      stack.reverse();
 
-    _processInvalidRegions: function processInvalidRegions(createInvalidPath) {
-      var objects = this._invalidObjects;
-      var regions = [];
+      while (stack.length) {
+        var node = stack.pop();
 
-      while (objects.length) {
-        var displayObject = objects.shift();
+        var m = node._concatenatedTransform;
 
-        if (displayObject._children.length) {
-          var children = displayObject._children;
-          for (var i = 0; i < children.length; i++) {
-            var child = children[i];
-            if (child._invalid === false) {
-              child._invalid = true;
-              objects.push(child);
-            }
-          }
+        if (!node._visible) {
+          node._invisible = true;
         }
 
-        var invalidRegion = displayObject._region;
-        var currentRegion = displayObject._getRegion(this);
+        var children = node._children;
+        var i = children.length;
+        while (i--) {
+          var child = children[i];
 
-        var withinView = displayObject._stage &&
-                         displayObject._visible &&
-                         currentRegion.xMax > 0 &&
-                         currentRegion.xMin < this._stageWidth &&
-                         currentRegion.yMax > 0 &&
-                         currentRegion.yMin < this._stageHeight;
-
-        if (withinView) {
-          var ancestor = displayObject._parent;
-          while (ancestor) {
-            if (!ancestor._visible || ancestor._hidden) {
-              withinView = false;
-              break;
-            }
-            ancestor = ancestor._parent;
+          if (!flash.display.DisplayObject.class.isInstanceOf(child)) {
+            continue;
           }
 
-          displayObject._hidden = !withinView;
+          if (node._invalid) {
+            child._invalid = true;
+          }
+          if (m.invalid) {
+            child._concatenatedTransform.invalid = true;
+          }
+          if (node._invisible) {
+            child._invisible = true;
+          }
+          stack.push(child);
+        }
+
+        if (node._level && m.invalid) {
+          var m2 = node._currentTransform;
+          var m3 = node._parent._concatenatedTransform;
+          m.a = m2.a * m3.a + m2.b * m3.c;
+          m.b = m2.a * m3.b + m2.b * m3.d;
+          m.c = m2.c * m3.a + m2.d * m3.c;
+          m.d = m2.d * m3.d + m2.c * m3.b;
+          m.tx = m2.tx * m3.a + m3.tx + m2.ty * m3.c;
+          m.ty = m2.ty * m3.d + m3.ty + m2.tx * m3.b;
+          m.invalid = false;
+        }
+
+        var invalidRegion = node._region;
+        var currentRegion = node._getRegion(m);
+
+        var hidden = node._invisible ||
+                     !currentRegion ||
+                     !(currentRegion.xMax - currentRegion.xMin) ||
+                     !(currentRegion.yMax - currentRegion.yMin) ||
+                     currentRegion.xMax <= 0 ||
+                     currentRegion.xMin >= this._stageWidth ||
+                     currentRegion.yMax <= 0 ||
+                     currentRegion.yMin >= this._stageHeight;
+
+        if (node._invalid) {
+          if (invalidRegion) {
+            invalidRegions.insert(invalidRegion);
+          }
+
+          if (!hidden && (!invalidRegion ||
+                             currentRegion.xMin !== invalidRegion.xMin ||
+                             currentRegion.yMin !== invalidRegion.yMin ||
+                             currentRegion.xMax !== invalidRegion.xMax ||
+                             currentRegion.yMax !== invalidRegion.yMax))
+          {
+            invalidRegions.insert(currentRegion);
+          }
+
+          displayList.push(node);
+        }
+
+        if (hidden) {
+          if (invalidRegion) {
+            qtree.remove(invalidRegion);
+            node._region = null;
+          }
+        } else if (invalidRegion) {
+          invalidRegion.xMin = currentRegion.xMin;
+          invalidRegion.xMax = currentRegion.xMax;
+          invalidRegion.yMin = currentRegion.yMin;
+          invalidRegion.yMax = currentRegion.yMax;
+          qtree.update(invalidRegion);
         } else {
-          displayObject._hidden = false;
+          currentRegion.obj = node;
+          qtree.insert(currentRegion);
+
+          node._region = currentRegion;
         }
 
-        var syncQtree = !invalidRegion || !withinView ||
-                        currentRegion.xMin !== invalidRegion.xMin ||
-                        currentRegion.yMin !== invalidRegion.yMin ||
-                        currentRegion.xMax !== invalidRegion.xMax ||
-                        currentRegion.yMax !== invalidRegion.yMax;
-
-        if (invalidRegion && syncQtree) {
-          invalidRegion._qtree.delete(invalidRegion);
-          displayObject._region = null;
-
-          regions.push(invalidRegion);
-        }
-
-        if (withinView) {
-          if (syncQtree) {
-            this._qtree.insert(currentRegion);
-
-            currentRegion.obj = displayObject;
-            displayObject._region = currentRegion;
-          }
-
-          regions.push(currentRegion);
-        } else {
-          displayObject._invalid = false;
-        }
-      }
-
-      if (!createInvalidPath) {
-        return;
+        node._zindex = zindex++;
       }
 
       var invalidPath = new ShapePath();
+      var redrawRegions = invalidRegions.retrieve();
 
-      for (var i = 0; i < regions.length; i++) {
-        var region = regions[i];
+      for (var i = 0; i < redrawRegions.length; i++) {
+        var region = redrawRegions[i];
         var xMin = region.xMin - region.xMin % 20 - 40;
         var yMin = region.yMin - region.yMin % 20 - 40;
         var xMax = region.xMax - region.xMax % 20 + 80;
         var yMax = region.yMax - region.yMax % 20 + 80;
-        var neighbours = this._qtree.retrieve(xMin, yMin, xMax, yMax);
-        for (var j = 0; j < neighbours.length; j++) {
-          var item = neighbours[j];
 
-          if (item.obj._invalid || (xMin > item.x + item.width) ||
-                                   (xMax < item.x) ||
-                                   (yMin > item.y + item.height) ||
-                                   (yMax < item.y))
-          {
+        var intersectees = qtree.retrieve(xMin, xMax, yMin, yMax);
+        for (var j = 0; j < intersectees.length; j++) {
+          var item = intersectees[j];
+
+          if (item.obj._invalid) {
             continue;
           }
 
           item.obj._invalid = true;
+          displayList.push(item.obj);
         }
 
         invalidPath.rect(xMin, yMin, xMax - xMin, yMax - yMin);
       }
 
+      invalidRegions.reset();
+
       return invalidPath;
+    },
+
+    _render: function (ctx, invalidPath) {
+      ctx.save();
+
+      if (invalidPath) {
+        invalidPath.draw(ctx);
+        ctx.clip();
+      }
+
+      var bgcolor = this._color;
+      if (bgcolor) {
+        if (bgcolor.alpha < 255) {
+          ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+        }
+        if (bgcolor.alpha > 0) {
+          ctx.fillStyle = rgbaObjToStr(bgcolor);
+          if (this.invalidPath) {
+            ctx.fill();
+          } else {
+            ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+          }
+        }
+      }
+
+      ctx.mozFillRule = 'evenodd';
+
+      var colorTransform = new RenderingColorTransform();
+
+      var displayList = this._displayList;
+      displayList.sort(sortByZindex);
+      for (var i = 0; i < displayList.length; i++) {
+        var displayObject = displayList[i];
+
+        var m = displayObject._concatenatedTransform;
+        ctx.setTransform(m.a, m.b, m.c, m.d, m.tx/20, m.ty/20);
+        //if (m) {
+        //  if (m.a * m.d == m.b * m.c) {
+        //    // Workaround for bug 844184 -- the object is invisible
+        //    ctx.closePath();
+        //    ctx.rect(0, 0, 0, 0);
+        //    ctx.clip();
+        //  } else {
+        //    ctx.transform(m.a, m.b, m.c, m.d, m.tx/20, m.ty/20);
+        //  }
+        //}
+
+        //if (!renderAsWireframe.value) {
+
+          //if (displayObject._alpha !== 1) {
+          //  ctx.globalAlpha = displayObject._alpha;
+          //}
+
+          // TODO: move into Graphics class
+          if (displayObject._graphics) {
+            var graphics = displayObject._graphics;
+
+            if (graphics._bitmap) {
+              ctx.save();
+              ctx.translate(displayObject._bbox.xMin/20, displayObject._bbox.yMin/20);
+              //context.colorTransform.setAlpha(ctx, true);
+              ctx.drawImage(graphics._bitmap, 0, 0);
+              ctx.restore();
+            } else {
+              if (!disableShapes.value) {
+                graphics.draw(ctx, false, 0, colorTransform);
+              }
+            }
+          }
+
+          if (displayObject.draw) {
+            displayObject.draw(ctx, 0, colorTransform);
+          }
+
+        //}
+
+        displayObject._invalid = false;
+      }
+      displayList.length = 0;
+
+      ctx.restore();
+
+      if (showRedrawRegions.value) {
+        ctx.strokeStyle = 'red';
+        invalidPath.draw(ctx);
+        ctx.stroke();
+      }
     },
 
     _handleMouseButtons: function () {
@@ -227,37 +339,33 @@ var StageDefinition = (function () {
       var mouseX = this._mouseX;
       var mouseY = this._mouseY;
 
-      var candidates = this._qtree.retrieve(mouseX, mouseY, 1, 1);
+      var candidates = this._qtree.retrieve(mouseX, mouseX, mouseY, mouseY);
       var objectsUnderMouse = [];
 
       for (var i = 0; i < candidates.length; i++) {
         var item = candidates[i];
         var displayObject = item.obj;
-        if (mouseX >= item.xMin && mouseX <= item.xMax &&
-            mouseY >= item.yMin && mouseY <= item.yMax)
-        {
-          if (flash.display.SimpleButton.class.isInstanceOf(displayObject)) {
-            if (!displayObject._enabled) {
-              continue;
-            }
+        if (flash.display.SimpleButton.class.isInstanceOf(displayObject)) {
+          if (!displayObject._enabled) {
+            continue;
+          }
 
-            var hitArea = displayObject._hitTestState;
+          var hitArea = displayObject._hitTestState;
 
-            hitArea._parent = displayObject;
-            if (hitArea._hitTest(true, mouseX, mouseY, true)) {
-              objectsUnderMouse.push(displayObject);
-            }
-            hitArea._parent = null;
-          } else if (displayObject._hitTest(true, mouseX, mouseY, true)) {
+          hitArea._parent = displayObject;
+          if (hitArea._hitTest(true, mouseX, mouseY, true)) {
             objectsUnderMouse.push(displayObject);
           }
+          hitArea._parent = null;
+        } else if (displayObject._hitTest(true, mouseX, mouseY, true)) {
+          objectsUnderMouse.push(displayObject);
         }
       }
 
       var target;
 
       if (objectsUnderMouse.length) {
-        objectsUnderMouse.sort(sortByDepth);
+        objectsUnderMouse.sort(sortByZindex);
 
         var i = objectsUnderMouse.length;
 

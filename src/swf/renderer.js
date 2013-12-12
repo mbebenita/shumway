@@ -19,14 +19,18 @@
 
 var rendererOptions = coreOptions.register(new OptionSet("Renderer Options"));
 var traceRenderer = rendererOptions.register(new Option("tr", "traceRenderer", "number", 0, "trace renderer execution"));
-var disablePreVisitor = rendererOptions.register(new Option("dpv", "disablePreVisitor", "boolean", false, "disable pre visitor"));
 var disableRenderVisitor = rendererOptions.register(new Option("drv", "disableRenderVisitor", "boolean", false, "disable render visitor"));
 var disableMouseVisitor = rendererOptions.register(new Option("dmv", "disableMouseVisitor", "boolean", false, "disable mouse visitor"));
 var showRedrawRegions = rendererOptions.register(new Option("rr", "showRedrawRegions", "boolean", false, "show redraw regions"));
 var renderAsWireframe = rendererOptions.register(new Option("raw", "renderAsWireframe", "boolean", false, "render as wireframe"));
 var showQuadTree = rendererOptions.register(new Option("qt", "showQuadTree", "boolean", false, "show quad tree"));
 var turboMode = rendererOptions.register(new Option("", "turbo", "boolean", false, "turbo mode"));
+var forceHidpi = rendererOptions.register(new Option("", "forceHidpi", "boolean", false, "force hidpi"));
 
+var disableShapes = rendererOptions.register(new Option("", "disableShapes", "boolean", false, "disable shape drawing"));
+var disableBitmaps = rendererOptions.register(new Option("", "disableBitmaps", "boolean", false, "disable bitmap drawing"));
+var disableText = rendererOptions.register(new Option("", "disableText", "boolean", false, "disable text drawing"));
+var disablePixelSnapping = rendererOptions.register(new Option("", "disablePixelSnapping", "boolean", false, "disable pixel snapping"));
 
 var enableConstructChildren = rendererOptions.register(new Option("", "constructChildren", "boolean", true, "Construct Children"));
 var enableEnterFrame = rendererOptions.register(new Option("", "enterFrame", "boolean", true, "Enter Frame"));
@@ -34,6 +38,7 @@ var enableAdvanceFrame = rendererOptions.register(new Option("", "advanceFrame",
 
 if (typeof FirefoxCom !== 'undefined') {
   turboMode.value = FirefoxCom.requestSync('getBoolPref', {pref: 'shumway.turboMode', def: false});
+  forceHidpi.value = FirefoxCom.requestSync('getBoolPref', {pref: 'shumway.force_hidpi', def: false});
 }
 
 var CanvasCache = {
@@ -344,7 +349,7 @@ RenderVisitor.prototype = {
   },
 
   clipStart: function(child) {
-    var m = child._parent._getConcatenatedTransform(true);
+    var m = child._parent._getConcatenatedTransform(null, true);
     var tx = m.tx / 20;
     var ty = m.ty / 20;
 
@@ -824,21 +829,18 @@ function renderStage(stage, ctx, events) {
 
         var invalidPath = null;
 
-        if (!disablePreVisitor.value) {
-          traceRenderer.value && frameWriter.enter("> Pre Visitor");
-          timelineEnter("PRE");
-          invalidPath = stage._processInvalidRegions(true);
-          timelineLeave("PRE");
-          traceRenderer.value && frameWriter.leave("< Pre Visitor");
-        } else {
-          stage._processInvalidRegions(false);
-        }
+        traceRenderer.value && frameWriter.enter("> Invalidation");
+        timelineEnter("INVALIDATE");
+        invalidPath = stage._processInvalidations();
+        timelineLeave("INVALIDATE");
+        traceRenderer.value && frameWriter.leave("< Invalidation");
 
         if (!disableRenderVisitor.value) {
           timelineEnter("RENDER");
-          traceRenderer.value && frameWriter.enter("> Render Visitor");
-          (new RenderVisitor(stage, ctx, invalidPath, refreshStage)).start();
-          traceRenderer.value && frameWriter.leave("< Render Visitor");
+          traceRenderer.value && frameWriter.enter("> Rendering");
+          //(new RenderVisitor(stage, ctx, invalidPath, refreshStage)).start();
+          stage._render(ctx, invalidPath);
+          traceRenderer.value && frameWriter.leave("< Rendering");
           timelineLeave("RENDER");
         }
 
@@ -856,9 +858,9 @@ function renderStage(stage, ctx, events) {
 
       if (mouseMoved && !disableMouseVisitor.value) {
         renderFrame && timelineEnter("MOUSE");
-        traceRenderer.value && frameWriter.enter("> Mouse Visitor");
+        traceRenderer.value && frameWriter.enter("> Mouse Handling");
         stage._handleMouse();
-        traceRenderer.value && frameWriter.leave("< Mouse Visitor");
+        traceRenderer.value && frameWriter.leave("< Mouse Handling");
         renderFrame && timelineLeave("MOUSE");
 
         ctx.canvas.style.cursor = stage._cursor;

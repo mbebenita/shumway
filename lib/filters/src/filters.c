@@ -7,13 +7,15 @@ void preMultiplyAlpha(unsigned char *img, int width, int height)
 {
 	unsigned char *ptr = img;
 	unsigned char *ptrEnd = img + ((width * height) << 2);
-	float alpha;
+	unsigned char ac;
+	float a;
 	while (ptr < ptrEnd) {
-		alpha = *(ptr + 3) / 255.0;
-		if (alpha != 0) {
-			*ptr *= alpha;
-			*(ptr + 1) *= alpha;
-			*(ptr + 2) *= alpha;
+		ac = *(ptr + 3);
+		if (ac != 0) {
+			a = ac / 255.0;
+			*ptr *= a;
+			*(ptr + 1) *= a;
+			*(ptr + 2) *= a;
 		} else {
 			*ptr = 0;
 			*(ptr + 1) = 0;
@@ -27,13 +29,15 @@ void unpreMultiplyAlpha(unsigned char *img, int width, int height)
 {
 	unsigned char *ptr = img;
 	unsigned char *ptrEnd = img + ((width * height) << 2);
-	float alpha;
+	unsigned char ac;
+	float a;
 	while (ptr < ptrEnd) {
-		alpha = *(ptr + 3) / 255.0;
-		if (alpha != 0) {
-			*ptr /= alpha;
-			*(ptr + 1) /= alpha;
-			*(ptr + 2) /= alpha;
+		ac = *(ptr + 3);
+		if (ac != 0) {
+			a = ac / 255.0;
+			*ptr /= a;
+			*(ptr + 1) /= a;
+			*(ptr + 2) /= a;
 		} else {
 			*ptr = 0;
 			*(ptr + 1) = 0;
@@ -77,10 +81,8 @@ void blurX(unsigned char *img, int width, int height, int distance, unsigned int
 	unsigned int *pBorderLeft = (unsigned int *)lineBufferIn;
 	unsigned int *pBorderRight = (unsigned int *)(lineBufferIn + lineInSize - 4);
 	for (int i = 0; i < dist2; ++i) {
-		*pBorderLeft = borderColor;
-		*pBorderRight = borderColor;
-		pBorderLeft++;
-		pBorderRight--;
+		*pBorderLeft++ = borderColor;
+		*pBorderRight-- = borderColor;
 	}
 
 	for (int y = 0; y < height; ++y) {
@@ -110,9 +112,7 @@ void blurY(unsigned char *img, int width, int height, int distance, unsigned int
 	unsigned int *pBorderBottom = (unsigned int *)(lineBufferIn + lineInSize - 4);
 	for (int i = 0; i < dist2; ++i) {
 		*pBorderTop++ = borderColor;
-		*pBorderBottom = borderColor;
-		pBorderTop++;
-		pBorderBottom--;
+		*pBorderBottom-- = borderColor;
 	}
 
 	unsigned char *lineBufferOut = malloc(lineOutSize);
@@ -186,33 +186,215 @@ void boxBlur(unsigned int *lineBufferOut, unsigned char *lineBufferIn, int width
 	}
 }
 
+void blurAlpha(unsigned char *img, int width, int height, int bx, int by, int quality, unsigned char borderAlpha, int rx, int ry, int rw, int rh)
+{
+	int bxTotal = bx * (quality - 1);
+	int byTotal = by * (quality - 1);
+	rx += bxTotal;
+	ry += byTotal;
+	rw -= bxTotal << 1;
+	rh -= byTotal << 1;
+	for (int i = 0; i < quality; ++i) {
+		blurXAlpha(img, width, height, bx, borderAlpha, rx, ry, rw, rh);
+		blurYAlpha(img, width, height, by, borderAlpha, rx, ry, rw, rh);
+		rx -= bx;
+		ry -= by;
+		rw += bx << 1;
+		rh += by << 1;
+	}
+}
+
+void blurXAlpha(unsigned char *img, int width, int height, int distance, unsigned char borderAlpha, int rx, int ry, int rw, int rh)
+{
+	if (distance < 1) {
+		return;
+	}
+
+	unsigned char *src = img + (ry * width) + rx;
+
+	int dist2 = distance << 1;
+	int windowLength = dist2 + 1;
+
+	unsigned char *lineBufferIn = malloc(rw + dist2);
+	memset(lineBufferIn, borderAlpha, dist2);
+	memset(lineBufferIn + rw, borderAlpha, dist2);
+
+	for (int y = 0; y < rh; ++y) {
+		memcpy(lineBufferIn + dist2, src + distance, rw - dist2);
+		boxBlurAlpha(src, lineBufferIn, rw, windowLength);
+		src += width;
+	}
+
+	free(lineBufferIn);
+}
+
+void blurYAlpha(unsigned char *img, int width, int height, int distance, unsigned char borderAlpha, int rx, int ry, int rw, int rh)
+{
+	if (distance < 1) {
+		return;
+	}
+
+	unsigned char *src = img + (ry * width) + rx;
+
+	int dist2 = distance << 1;
+	int windowLength = dist2 + 1;
+
+	unsigned char *lineBufferIn = malloc(rh + dist2);
+	memset(lineBufferIn, borderAlpha, dist2);
+	memset(lineBufferIn + rh, borderAlpha, dist2);
+
+	unsigned char *lineBufferOut = malloc(rh);
+	memset(lineBufferOut, 0, rh);
+
+	unsigned char *psrc;
+	unsigned char *pline;
+	int srcOffs = distance * width;
+	int x, y;
+
+	for (x = 0; x < rw; ++x) {
+		psrc = src + srcOffs;
+		pline = lineBufferIn + dist2;
+		for (y = 0; y < rh - dist2; ++y) {
+			*pline++ = *psrc;
+			psrc += width;
+		}
+
+		boxBlurAlpha(lineBufferOut, lineBufferIn, rh, windowLength);
+
+		psrc = src;
+		pline = lineBufferOut;
+		for (y = 0; y < rh; ++y) {
+			*psrc = *pline++;
+			psrc += width;
+		}
+
+		src++;
+	}
+
+	free(lineBufferOut);
+	free(lineBufferIn);
+}
+
+void boxBlurAlpha(unsigned char *lineBufferOut, unsigned char *lineBufferIn, int width, int windowLength)
+{
+	unsigned long as = 0;
+
+	// Init window
+	unsigned char *ptr = lineBufferIn;
+	unsigned char *ptrEnd = lineBufferIn + windowLength;
+	while (ptr < ptrEnd) {
+		as += *ptr++;
+	}
+
+	// Slide window
+	unsigned char *pLast = lineBufferIn;
+	unsigned char *pNext = lineBufferIn + windowLength;
+	for (int x = 0; x < width; ++x) {
+		*lineBufferOut++ = as / windowLength;
+		as += *pNext++ - *pLast++;
+	}
+}
+
 void dropshadow(unsigned char *img, int width, int height, int dx, int dy, unsigned int color, int alpha, int bx, int by, double strength, int quality, unsigned int flags)
 {
 	int inner = flags & 1;
 	int knockout = (flags >> 1) & 1;
 	int hideObject = (flags >> 2) & 1;
-	int len = width * height;
+	int size = width * height;
+	int size4 = size << 2;
+	int i;
 
-	unsigned char *tmp = malloc(len << 2);
-	memset(tmp, 0, len << 2);
+	unsigned char defaultalpha = (inner == 1) ? 0xff : 0;
 
-	pan(tmp, img, width, height, dx, dy);
-	tint(tmp, tmp, width, height, color, inner);
-	blur(tmp, width, height, bx, by, quality, (inner == 1) ? (color | 0xff000000) : 0);
-	scaleAlpha(tmp, width, height, strength);
+	unsigned char *tmp = malloc(size4);
+	memset(tmp, defaultalpha, size);
 
+	// Copy img's alpha channel to tmp, offset by dx/dy
+	unsigned char *ptmp = tmp;
+	unsigned char *pimg = img + 3;
+	if (dx == 0 && dy == 0) {
+		// No offset: just copy
+		if (inner == 1) {
+			for (i = 0; i < size; ++i) {
+				*ptmp++ = 255 - *pimg;
+				pimg += 4;
+			}
+		} else {
+			for (i = 0; i < size; ++i) {
+				*ptmp++ = *pimg;
+				pimg += 4;
+			}
+		}
+	} else {
+		int w = width - abs(dx);
+		int h = height - abs(dy);
+		int width4 = width << 2;
+		int x, x4, y;
+		if (dx > 0) {
+			ptmp += dx;
+		} else {
+			pimg -= dx * 4;
+		}
+		if (dy > 0) {
+			ptmp += dy * width;
+		} else {
+			pimg -= dy * width * 4;
+		}
+		if (inner == 1) {
+			for (y = 0; y < h; ++y) {
+				for (x = 0, x4 = 0; x < w; ++x, x4 += 4) {
+					*(ptmp + x) = 255 - *(pimg + x4);
+				}
+				ptmp += width;
+				pimg += width4;
+			}
+		} else {
+			for (y = 0; y < h; ++y) {
+				for (x = 0, x4 = 0; x < w; ++x, x4 += 4) {
+					*(ptmp + x) = *(pimg + x4);
+				}
+				ptmp += width;
+				pimg += width4;
+			}
+		}
+	}
+
+	// Blur the alpha channel
+	blurAlpha(tmp, width, height, bx, by, quality, defaultalpha, 0, 0, width, height);
+
+	// Tint and multiply strength
+	unsigned char r = (color >> 16) & 0xff;
+	unsigned char g = (color >> 8) & 0xff;
+	unsigned char b = color & 0xff;
+	unsigned int bgr = r | g << 8 | b << 16 | 0xff000000;
+	float af;
+	unsigned long ac;
+	unsigned int *ptmp32 = (unsigned int *)tmp + size - 1;
+	ptmp = tmp + size;
+	while (--ptmp >= tmp) {
+		ac = *ptmp * strength;
+		if (ac >= 255) {
+			*ptmp32-- = bgr;
+		} else if (ac > 0) {
+			af = ac / 255.0;
+			*ptmp32-- = (int)(r * af) | (int)(g * af) << 8 | (int)(b * af) << 16 | ac << 24;
+		} else {
+			*ptmp32-- = 0;
+		}
+	}
+
+	// Composite shadow with image
 	if (inner == 1) {
 		if (knockout == 0 && hideObject == 0) {
-			compositeDestinationAtop(tmp, img, width, height);
+			compositeSourceAtop(img, tmp, width, height);
 		} else {
-			compositeDestinationIn(tmp, img, width, height);
+			compositeSourceIn(img, tmp, width, height);
 		}
-		memcpy(img, tmp, len << 2);
 	} else {
 		if (knockout == 1) {
 			compositeSourceOut(img, tmp, width, height);
 		} else if (hideObject == 1) {
-			memcpy(img, tmp, len << 2);
+			memcpy(img, tmp, size4);
 		} else {
 			compositeDestinationOver(img, tmp, width, height);
 		}
@@ -221,128 +403,6 @@ void dropshadow(unsigned char *img, int width, int height, int dx, int dy, unsig
 	free(tmp);
 }
 
-void pan(unsigned char *dst, unsigned char *src, int width, int height, int dx, int dy)
-{
-	if (dx == 0 && dy == 0) {
-		if (dst != src) {
-			memcpy(dst, src, width * height * 4);
-		}
-		return;
-	}
-
-	unsigned int *psrc = (unsigned int *)src;
-	unsigned int *pdst = (unsigned int *)dst;
-	int w = width - abs(dx);
-	int h = height - abs(dy);
-	if (dx > 0) { pdst += dx; }
-	if (dy > 0) { pdst += dy * width; }
-	if (dx < 0) { psrc -= dx; }
-	if (dy < 0) { psrc -= dy * width; }
-	if (pdst <= psrc) {
-		for (int y = 0; y < h; ++y) {
-			for (int x = 0; x < w; ++x) {
-				*(pdst + x) = *(psrc + x);
-			}
-			pdst += width;
-			psrc += width;
-		}
-	} else {
-		int end = width * (h - 1);
-		psrc += end;
-		pdst += end;
-		w--; h--;
-		for (int y = h; y >= 0; --y) {
-			for (int x = w; x >= 0; --x) {
-				*(pdst + x) = *(psrc + x);
-			}
-			pdst -= width;
-			psrc -= width;
-		}
-	}
-}
-
-void tint(unsigned char *dst, unsigned char *src, int width, int height, unsigned int color, int invertAlpha)
-{
-	unsigned int *dst32 = (unsigned int *)dst;
-	unsigned int *end32 = dst32 + (width * height);
-
-	unsigned char r = (color >> 16) & 0xff;
-	unsigned char g = (color >> 8) & 0xff;
-	unsigned char b = color & 0xff;
-	unsigned int bgr = r | g << 8 | b << 16 | 0xff000000;
-
-	float af;
-	unsigned char ac;
-
-	src += 3;
-	if (invertAlpha) {
-		while (dst32 < end32) {
-			ac = *src;
-			if (ac == 0) {
-				*dst32 = bgr;
-			} else if (ac < 255) {
-				ac = 255 - ac;
-				af = ac / 255.0;
-				*dst32 = (int)(r * af) | (int)(g * af) << 8 | (int)(b * af) << 16 | ac << 24;
-			} else {
-				*dst32 = 0;
-			}
-			dst32++;
-			src += 4;
-		}
-	} else {
-		while (dst32 < end32) {
-			ac = *src;
-			if (ac == 255) {
-				*dst32 = bgr;
-			} else if (ac > 0) {
-				af = ac / 255.0;
-				*dst32 = (int)(r * af) | (int)(g * af) << 8 | (int)(b * af) << 16 | ac << 24;
-			} else {
-				*dst32 = 0;
-			}
-			dst32++;
-			src += 4;
-		}
-	}
-}
-
-void scaleAlpha(unsigned char *img, int width, int height, double strength)
-{
-	if (strength == 1.0) {
-		return;
-	}
-
-	unsigned char *imgEnd = img + ((width * height) << 2);
-
-	unsigned int *img32 = (unsigned int *)img;
-
-	int r, g, b, a;
-	float rr, rg, rb, ra;
-	float mult;
-
-	while (img < imgEnd) {
-		ra = *(img + 3);
-		if (ra == 0) {
-			*img32++ = 0;
-		} else {
-			a = ra * strength;
-			a = clamp(a);
-			if (a == ra) {
-				*img32++ = *img | *(img + 1) << 8 | *(img + 2) << 16 | a << 24;
-			} else {
-				mult = a / ra;
-				rr = *img * mult;
-				rg = *(img + 1) * mult;
-				rb = *(img + 2) * mult;
-				*img32++ = clamp(rr) | clamp(rg) << 8 | clamp(rb) << 16 | a << 24;
-			}
-		}
-		img += 4;
-	}
-}
-
-// TODO: REVIST
 void compositeSourceOver(unsigned char *dst, unsigned char *src, int width, int height)
 {
 	unsigned char *end = src + ((width * height) << 2);
@@ -375,70 +435,7 @@ void compositeSourceOver(unsigned char *dst, unsigned char *src, int width, int 
 	}
 }
 
-// TODO: REVIST
-void compositeDestinationOver(unsigned char *dst, unsigned char *src, int width, int height)
-{
-	unsigned char *end = src + ((width * height) << 2);
-
-	unsigned int *dst32 = (unsigned int *)dst;
-
-	int dr, dg, db;
-	int sr, sg, sb;
-	double sa;
-	double da;
-	double da_inv;
-
-	while (src < end) {
-		sr = *src;
-		sg = *(src + 1);
-		sb = *(src + 2);
-		sa = *(src + 3) / 255.0;
-		dr = *dst;
-		dg = *(dst + 1);
-		db = *(dst + 2);
-		da = *(dst + 3) / 255.0;
-		da_inv = 1.0 - da;
-		*dst32++ =
-			(int)(dr + sr * da_inv) |
-			(int)(dg + sg * da_inv) << 8 |
-			(int)(db + sb * da_inv) << 16 |
-			(int)((da + sa * da_inv) * 255.0) << 24;
-		src += 4;
-		dst += 4;
-	}
-}
-
-// TODO: REVIST
 void compositeSourceIn(unsigned char *dst, unsigned char *src, int width, int height)
-{
-	unsigned char *end = src + ((width * height) << 2);
-
-	unsigned int *dst32 = (unsigned int *)dst;
-
-	int dr, dg, db;
-	int sr, sg, sb;
-	double sa;
-	double da;
-	double da_inv;
-
-	while (src < end) {
-		sr = *src;
-		sg = *(src + 1);
-		sb = *(src + 2);
-		sa = *(src + 3) / 255.0;
-		da = *(dst + 3) / 255.0;
-		da_inv = 1.0 - da;
-		*dst32++ =
-			(int)(sa * sr * da) |
-			(int)(sa * sg * da) << 8 |
-			(int)(sa * sb * da) << 16 |
-			(int)((sa * da) * 255.0) << 24;
-		src += 4;
-		dst += 4;
-	}
-}
-
-void compositeDestinationIn(unsigned char *dst, unsigned char *src, int width, int height)
 {
 	unsigned char *end = src + ((width * height) << 2);
 
@@ -447,7 +444,6 @@ void compositeDestinationIn(unsigned char *dst, unsigned char *src, int width, i
 	int d, s;
 	float rr, rg, rb, ra;
 	float da;
-	float sa;
 
 	while (src < end) {
 		d = *(dst + 3);
@@ -459,11 +455,10 @@ void compositeDestinationIn(unsigned char *dst, unsigned char *src, int width, i
 				*dst32++ = 0;
 			} else {
 				da = d / 255.0;
-				sa = s / 255.0;
-				rr = *dst       * sa;
-				rg = *(dst + 1) * sa;
-				rb = *(dst + 2) * sa;
-				ra = (da * sa) * 255.0;
+				rr = *src       * da;
+				rg = *(src + 1) * da;
+				rb = *(src + 2) * da;
+				ra = da * s;
 				*dst32++ = clamp(rr) | clamp(rg) << 8 | clamp(rb) << 16 | clamp(ra) << 24;
 			}
 		}
@@ -503,8 +498,42 @@ void compositeSourceOut(unsigned char *dst, unsigned char *src, int width, int h
 	}
 }
 
-// TODO: REVIST
-void compositeDestinationOut(unsigned char *dst, unsigned char *src, int width, int height)
+void compositeSourceAtop(unsigned char *dst, unsigned char *src, int width, int height)
+{
+	unsigned char *end = src + ((width * height) << 2);
+
+	unsigned int *dst32 = (unsigned int *)dst;
+
+	int d, s;
+	float rr, rg, rb, ra;
+	float sa, sa_inv;
+	float da;
+
+	while (src < end) {
+		d = *(dst + 3);
+		if (d == 0) {
+			*dst32++ = 0;
+		} else {
+			s = *(src + 3);
+			if (s == 0) {
+				dst32++;
+			} else {
+				da = d / 255.0;
+				sa = s / 255.0;
+				sa_inv = (1.0 - sa);
+				rr = *src       * da + *dst       * sa_inv;
+				rg = *(src + 1) * da + *(dst + 1) * sa_inv;
+				rb = *(src + 2) * da + *(dst + 2) * sa_inv;
+				ra = (sa * da + da * sa_inv) * 255.0;
+				*dst32++ = clamp(rr) | clamp(rg) << 8 | clamp(rb) << 16 | clamp(ra) << 24;
+			}
+		}
+		src += 4;
+		dst += 4;
+	}
+}
+
+void compositeDestinationOver(unsigned char *dst, unsigned char *src, int width, int height)
 {
 	unsigned char *end = src + ((width * height) << 2);
 
@@ -512,22 +541,57 @@ void compositeDestinationOut(unsigned char *dst, unsigned char *src, int width, 
 
 	int dr, dg, db;
 	int sr, sg, sb;
-	double da;
 	double sa;
-	double sa_inv;
+	double da;
+	double da_inv;
 
 	while (src < end) {
+		sr = *src;
+		sg = *(src + 1);
+		sb = *(src + 2);
+		sa = *(src + 3) / 255.0;
 		dr = *dst;
 		dg = *(dst + 1);
 		db = *(dst + 2);
 		da = *(dst + 3) / 255.0;
-		sa = *(src + 3) / 255.0;
-		sa_inv = 1.0 - sa;
+		da_inv = 1.0 - da;
 		*dst32++ =
-			(int)(da * dr * sa_inv) |
-			(int)(da * dg * sa_inv) << 8 |
-			(int)(da * db * sa_inv) << 16 |
-			(int)((da * sa_inv) * 255.0) << 24;
+			(int)(dr + sr * da_inv) |
+			(int)(dg + sg * da_inv) << 8 |
+			(int)(db + sb * da_inv) << 16 |
+			(int)((da + sa * da_inv) * 255.0) << 24;
+		src += 4;
+		dst += 4;
+	}
+}
+
+void compositeDestinationIn(unsigned char *dst, unsigned char *src, int width, int height)
+{
+	unsigned char *end = src + ((width * height) << 2);
+
+	unsigned int *dst32 = (unsigned int *)dst;
+
+	int d, s;
+	float rr, rg, rb, ra;
+	float sa;
+
+	while (src < end) {
+		d = *(dst + 3);
+		if (d == 0) {
+			*dst32++ = 0;
+		} else {
+			s = *(src + 3);
+			if (s == 0) {
+				*dst32++ = 0;
+			} else {
+				sa = s / 255.0;
+				rr = *dst       * sa;
+				rg = *(dst + 1) * sa;
+				rb = *(dst + 2) * sa;
+				ra = d * sa;
+				*dst32++ = clamp(rr) | clamp(rg) << 8 | clamp(rb) << 16 | clamp(ra) << 24;
+			}
+		}
 		src += 4;
 		dst += 4;
 	}
@@ -547,7 +611,7 @@ void compositeDestinationAtop(unsigned char *dst, unsigned char *src, int width,
 	while (src < end) {
 		d = *(dst + 3);
 		if (d == 0) {
-			*dst32++ = *(unsigned int *)src;
+			*dst32++ = 0;
 		} else {
 			s = *(src + 3);
 			if (s == 0) {
