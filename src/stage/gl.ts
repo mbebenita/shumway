@@ -19,13 +19,15 @@ module Shumway.GL {
 
   import Frame = Shumway.Layers.Frame;
   import Stage = Shumway.Layers.Stage;
-  import Bitmap = Shumway.Layers.Elements.Bitmap;
+  import Bitmap = Shumway.Layers.Bitmap;
+  import Shape = Shumway.Layers.Shape;
   import Flake = Shumway.Layers.Elements.Flake;
-  import Video = Shumway.Layers.Elements.Video;
+  import SolidRectangle = Shumway.Layers.SolidRectangle;
+  import Video = Shumway.Layers.Video;
   import Filter = Shumway.Layers.Filter;
   import BlurFilter = Shumway.Layers.BlurFilter;
 
-  var SHADER_ROOT = "shaders/";
+  export var SHADER_ROOT = "shaders/";
 
   function endsWith(str, end) {
     return str.indexOf(end, this.length - end.length) !== -1;
@@ -586,9 +588,17 @@ module Shumway.GL {
           brush.drawImage(src, undefined, new Color(1, 1, 1, frame.alpha), transform);
         } else if (frame instanceof Flake) {
           brush.fillRectangle(new Rectangle(0, 0, frame.w, frame.h), Color.parseColor((<Flake>frame).fillStyle), transform);
-
+        } else if (frame instanceof SolidRectangle) {
+          brush.fillRectangle(new Rectangle(0, 0, frame.w, frame.h), Color.parseColor((<SolidRectangle>frame).fillStyle), transform);
         } else if (frame instanceof Video) {
           // that.renderVideo(<Video>frame, transform);
+        } else if (frame instanceof Shape) {
+          var shape = <Shape>frame;
+          if (!shape.canvas) {
+            shape.cache();
+          }
+          var src: WebGLTextureRegion = this.context.cacheImage(shape.canvas, shape.canvas.width, shape.canvas.height, false, false);
+          brush.drawImage(src, undefined, new Color(1, 1, 1, frame.alpha), transform);
         }
       }, stage.transform);
 

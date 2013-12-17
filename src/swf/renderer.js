@@ -625,6 +625,7 @@ function timelineWrapBroadcastMessage(domain, message) {
 }
 
 function renderStage(stage, ctx, events) {
+
   var frameWidth, frameHeight;
 
   function updateRenderTransform() {
@@ -751,6 +752,8 @@ function renderStage(stage, ctx, events) {
   var frameCount = 0;
   var frameFPSAverage = new metrics.Average(120);
 
+  var once = true;
+
   (function draw() {
 
     var now = performance.now();
@@ -842,6 +845,12 @@ function renderStage(stage, ctx, events) {
           stage._render(ctx, invalidPath);
           traceRenderer.value && frameWriter.leave("< Rendering");
           timelineLeave("RENDER");
+
+          timelineEnter("GL");
+          stage._renderer.render(stage._frame, {
+            redraw: 1
+          });
+          timelineLeave("GL");
         }
 
         if (showQuadTree.value) {

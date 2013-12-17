@@ -7,6 +7,7 @@ var sampleText = [
 function randomText() {
   return sampleText[Math.random() * sampleText.length | 0];
 }
+
 function renderTextShape(str) {
   return function renderText(c) {
     c.font = "8pt Open Sans";
@@ -32,6 +33,20 @@ function renderTextShape(str) {
     }
   }
 }
+
+var SHAPE_ROOT = "assets/shapes/";
+
+function loadShape(file) {
+  var path = SHAPE_ROOT + file;
+  var gl = this.gl;
+  var request = new XMLHttpRequest();
+  request.open("GET", path, false);
+  request.send();
+  // assert (request.status === 200, "File : " + path + " not found.");
+  return JSON.parse(request.responseText);
+}
+
+// var tmp = loadShape("guy.json");
 
 function renderGuy(c) {
   c.save();

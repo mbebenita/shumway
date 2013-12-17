@@ -1,8 +1,53 @@
 /// <reference path='all.ts'/>
-import Frame = Shumway.Layers.Frame;
-import FrameContainer = Shumway.Layers.FrameContainer;
 
 module Shumway.Layers.Elements {
+
+  import Frame = Shumway.Layers.Frame;
+  import FrameContainer = Shumway.Layers.FrameContainer;
+  import RectanglePacker = Shumway.Geometry.RectanglePacker;
+
+  export class FontAtlas {
+    canvas: HTMLCanvasElement;
+    context: CanvasRenderingContext2D;
+    packer: RectanglePacker;
+    constructor(font: string) {
+      this.canvas = document.createElement("canvas");
+      var width = 512;
+      var height = 512;
+      this.canvas.width = width * 2;
+      this.canvas.height = height * 2;
+      this.canvas.style.width = width + 'px';
+      this.canvas.style.height = height + 'px';
+      this.context = this.canvas.getContext("2d");
+      this.context.font = font;
+      this.context.fillStyle = "white";
+      this.packer = new RectanglePacker(this.canvas.width, this.canvas.height, 2);
+      this._draw();
+    }
+    private _draw() {
+      this.context.save();
+      this.context.scale(2, 2);
+      var from = "0".charCodeAt(0);
+      var to = "z".charCodeAt(0);
+      for (var i = from; i < to * 16; i++) {
+        var c = String.fromCharCode(i);
+        var w = this.context.measureText(c).width;
+        var r = this.packer.insert(w, 12);
+        if (r) {
+          this.context.fillText(c, r.x, 12 + r.y);
+        }
+      }
+      this.context.restore();
+    }
+  }
+
+  export class TextLine extends Frame implements Shumway.IRenderable {
+    text: string;
+    constructor(text: string) {
+      super();
+      this.text = text;
+    }
+  }
 
   export class Flake extends Frame implements Shumway.IRenderable {
     radius: number;
@@ -24,7 +69,7 @@ module Shumway.Layers.Elements {
         this.scaleSpeed = 0.01 + Math.random() / 20;
         this.rotationSpeed = Math.random();
       }
-      this.rotation = Math.random() * 180;
+      // this.rotation = Math.random() * 180;
     }
     render (context: CanvasRenderingContext2D, options?: any) {
       context.save();
@@ -73,120 +118,6 @@ module Shumway.Layers.Elements {
         }
         flake.scaleX += flake.scaleSpeed;
       }
-    }
-  }
-
-  export class Shape extends Frame {
-    canvas: HTMLCanvasElement;
-    renderer: (context: CanvasRenderingContext2D) => void;
-    cacheAsBitmap: boolean;
-    constructor(renderer, w: number, h: number, cacheAsBitmap: boolean = true) {
-      super();
-      this.renderer = renderer;
-      this.w = w;
-      this.h = h;
-      this.cacheAsBitmap = cacheAsBitmap;
-    }
-    cache () {
-      if (!this.cacheAsBitmap) {
-        return;
-      }
-      this.canvas = document.createElement("canvas");
-      this.canvas.width = this.w;
-      this.canvas.height = this.h;
-      var context = this.canvas.getContext("2d");
-      this.renderer(context);
-    }
-    render (context: CanvasRenderingContext2D) {
-      context.save();
-      var t = this.transform;
-      context.transform(t.a, t.b, t.c, t.d, t.tx, t.ty);
-      if (this.canvas) {
-        context.drawImage(this.canvas, 0, 0);
-      } else {
-        this.cache();
-        this.renderer(context);
-      }
-      context.restore();
-    }
-  }
-
-  export class Bitmap extends Frame implements Shumway.IRenderable {
-    public image: HTMLImageElement;
-    constructor(image: HTMLImageElement) {
-      super();
-      this.image = image;
-      if (image.complete) {
-        this.w = image.width;
-        this.h = image.height;
-      } else {
-        var thisFrame = this;
-        image.addEventListener("load", function () {
-          thisFrame.w = image.width;
-          thisFrame.h = image.height;
-        });
-      }
-    }
-    render (context: CanvasRenderingContext2D, options?: any) {
-      context.save();
-      var t = this.transform;
-      context.transform(t.a, t.b, t.c, t.d, t.tx, t.ty);
-      if (options && options.snap) {
-        context.save();
-        context.setTransform(1, 0, 0, 1, t.tx | 0, t.ty | 0);
-        context.drawImage(this.image, 0, 0);
-        context.restore();
-      } else {
-        context.drawImage(this.image, 0, 0);
-      }
-      context.restore();
-    }
-  }
-
-  export class Video extends Frame implements Shumway.IRenderable {
-    video: HTMLVideoElement;
-    constructor(video: any) {
-      super();
-      var that = this;
-//      var events = 'loadstart,suspend,abort,error,emptied,stalled,loadedmetadata,loadeddata,canplay,canplaythrough,playing,waiting,seeking,seeked,ended,durationchange,timeupdate,progress,play,pause,ratechange,volumechange'.split(',');
-//      for (var i = 0; i < events.length; i++) {
-//        this.video["on" + events[i]] = (function (name) {
-//          return function () {
-//            console.info("Event: " + name);
-//          }
-//        })(events[i])
-//      }
-      this.video = video;
-      if (video.videoWidth && video.videoHeight) {
-        this.w = video.videoWidth;
-        this.h = video.videoHeight;
-      } else {
-        var thisFrame = this;
-        video.onloadedmetadata = function () {
-          thisFrame.w = video.videoWidth;
-          thisFrame.h = video.videoHeight;
-        };
-      }
-    }
-    render (context: CanvasRenderingContext2D, options?: any) {
-      context.save();
-      var t = this.transform;
-      context.transform(t.a, t.b, t.c, t.d, t.tx, t.ty);
-      if (options && options.alpha) {
-        context.globalAlpha = this.alpha;
-      }
-      if (options && options.snap) {
-        context.save();
-        context.setTransform(1, 0, 0, 1, t.tx | 0, t.ty | 0);
-        context.drawImage(this.video, 0, 0);
-        context.restore();
-      } else {
-        context.drawImage(this.video, 0, 0);
-      }
-      if (options && options.alpha) {
-        context.globalAlpha = 1;
-      }
-      context.restore();
     }
   }
 }

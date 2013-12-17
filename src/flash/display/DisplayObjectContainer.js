@@ -72,7 +72,6 @@ var DisplayObjectContainerDefinition = (function () {
         }
       }
       children.splice(index, 0, child);
-
       child._invalidateTransform();
       child._owned = false;
       child._parent = this;
@@ -267,6 +266,7 @@ var DisplayObjectContainerDefinition = (function () {
     this._tabChildren = true;
     this._sparse = false;
     this._isContainer = true;
+    this._frame = new FrameContainer();
   };
 
   def.__glue__ = {

@@ -31,14 +31,14 @@
     var Stage = Shumway.Layers.Stage;
     var Snow = Shumway.Layers.Elements.Snow;
     var Flake = Shumway.Layers.Elements.Flake;
-    var Bitmap = Shumway.Layers.Elements.Bitmap;
-    var Video = Shumway.Layers.Elements.Video;
-    var Text = Shumway.Layers.Elements.Text;
-    var Shape = Shumway.Layers.Elements.Shape;
-    var Slider = Shumway.Layers.Elements.Slider;
+    var Bitmap = Shumway.Layers.Bitmap;
+    var Video = Shumway.Layers.Video;
+    var Text = Shumway.Layers.Text;
+    var Shape = Shumway.Layers.Shape;
     var BlurFilter = Shumway.Layers.BlurFilter;
     var WebGLContext = Shumway.GL.WebGLContext;
     var WebGLStageRenderer = Shumway.GL.WebGLStageRenderer;
+    var FontAtlas = Shumway.Layers.Elements.FontAtlas;
   </script>
   <style>
     #debugInfoContainer {
@@ -74,6 +74,9 @@
     <canvas id="stageCanvas" style="background-color: #1F1F21;"></canvas>
     <!--<canvas id="stageCanvas" style="background-color: #1F1F21;"></canvas>-->
   </div>
+
+  <div id="container" style="clear: both;">
+  </div>
   <script>
 
     function shuffle(target, easing) {
@@ -84,7 +87,7 @@
         var x = Math.max(0, Math.random() * (canvas.width - w));
         var y = Math.max(0, Math.random() * (canvas.height - h));
         var s = 0.5;
-        // var s = 0.25 + Math.random() * 1;
+        var s = 0.25 + Math.random() * 4;
         // var s = (Math.random() - 0.5) * 4;
         tween.easing(easing);
         tween.delay(Math.random() * (500000 / sceneOptions.movement));
@@ -182,7 +185,7 @@
       var f = gui.addFolder("Scene Options");
       var c = [];
       c.push(f.add(sceneOptions, "flakes", 0, 50000).step(1));
-      c.push(f.add(sceneOptions, "shapes", 0, 100).step(1));
+      c.push(f.add(sceneOptions, "shapes", 0, 1000).step(1));
       c.push(f.add(sceneOptions, "bitmaps", 0, 10000).step(2));
       c.push(f.add(sceneOptions, "videos", 0, 1000).step(1));
       c.push(f.add(sceneOptions, "text", 0, 1000).step(1));
@@ -278,6 +281,10 @@
       animators.push(snow);
       stage.addChild(snow);
 
+      var fontAtlas = new FontAtlas("12px Consolas");
+      // document.addChild(fontAtlas.canvas);
+      document.getElementById("container").appendChild(fontAtlas.canvas);
+
       for (var i = 0; i < sceneOptions.text; i++) {
         var frame = new Shape(renderTextShape(randomText()), 256, 200, sceneOptions.cacheAsBitmap);
         frame.x = (Math.random()) * canvas.width;
@@ -288,7 +295,8 @@
       }
 
       for (var i = 0; i < sceneOptions.shapes; i++) {
-        var frame = new Shape(renderGuy, 100, 110, sceneOptions.cacheAsBitmap);
+        var frame = new Shape(renderGuy, 600, 400, sceneOptions.cacheAsBitmap);
+        // var frame = new Shape(renderGuy, 100, 110, sceneOptions.cacheAsBitmap);
         frame.x = (Math.random()) * canvas.width;
         frame.y = (Math.random()) * canvas.height;
         frame.alpha = Math.random();

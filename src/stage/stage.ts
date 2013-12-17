@@ -186,6 +186,10 @@ module Shumway.Layers {
       this.children.push(child);
     }
 
+    public clearChildren() {
+      this.children.length = 0;
+    }
+
     public shuffleChildren() {
       var length = this.children.length;
       for (var i = 0; i < length * 2; i++) {
@@ -297,5 +301,126 @@ module Shumway.Layers {
 
   export interface IAnimator {
     onEnterFrame ();
+  }
+
+  export class SolidRectangle extends Frame implements Shumway.IRenderable {
+    fillStyle: string = randomStyle();
+    constructor() {
+      super();
+    }
+  }
+
+  export class Shape extends Frame {
+    canvas: HTMLCanvasElement;
+    renderer: (context: CanvasRenderingContext2D) => void;
+    cacheAsBitmap: boolean;
+    constructor(renderer, w: number, h: number, cacheAsBitmap: boolean = true) {
+      super();
+      this.renderer = renderer;
+      this.w = w;
+      this.h = h;
+      this.cacheAsBitmap = cacheAsBitmap;
+    }
+    cache () {
+      if (!this.cacheAsBitmap) {
+        return;
+      }
+      this.canvas = document.createElement("canvas");
+      this.canvas.width = this.w;
+      this.canvas.height = this.h;
+      var context = this.canvas.getContext("2d");
+      this.renderer(context);
+    }
+    render (context: CanvasRenderingContext2D) {
+      context.save();
+      var t = this.transform;
+      context.transform(t.a, t.b, t.c, t.d, t.tx, t.ty);
+      if (this.canvas) {
+        context.drawImage(this.canvas, 0, 0);
+      } else {
+        this.cache();
+        this.renderer(context);
+      }
+      context.restore();
+    }
+  }
+
+  export class Bitmap extends Frame implements Shumway.IRenderable {
+    public image: HTMLImageElement;
+    constructor(image: HTMLImageElement) {
+      super();
+      this.image = image;
+      if (image.complete) {
+        this.w = image.width;
+        this.h = image.height;
+      } else {
+        var thisFrame = this;
+        image.addEventListener("load", function () {
+          thisFrame.w = image.width;
+          thisFrame.h = image.height;
+        });
+      }
+    }
+    render (context: CanvasRenderingContext2D, options?: any) {
+      context.save();
+      var t = this.transform;
+      context.transform(t.a, t.b, t.c, t.d, t.tx, t.ty);
+      if (options && options.snap) {
+        context.save();
+        context.setTransform(1, 0, 0, 1, t.tx | 0, t.ty | 0);
+        context.drawImage(this.image, 0, 0);
+        context.restore();
+      } else {
+        context.drawImage(this.image, 0, 0);
+      }
+      context.restore();
+    }
+  }
+
+  export class Video extends Frame implements Shumway.IRenderable {
+    video: HTMLVideoElement;
+    constructor(video: any) {
+      super();
+      var that = this;
+//      var events = 'loadstart,suspend,abort,error,emptied,stalled,loadedmetadata,loadeddata,canplay,canplaythrough,playing,waiting,seeking,seeked,ended,durationchange,timeupdate,progress,play,pause,ratechange,volumechange'.split(',');
+//      for (var i = 0; i < events.length; i++) {
+//        this.video["on" + events[i]] = (function (name) {
+//          return function () {
+//            console.info("Event: " + name);
+//          }
+//        })(events[i])
+//      }
+      this.video = video;
+      if (video.videoWidth && video.videoHeight) {
+        this.w = video.videoWidth;
+        this.h = video.videoHeight;
+      } else {
+        var thisFrame = this;
+        video.onloadedmetadata = function () {
+          thisFrame.w = video.videoWidth;
+          thisFrame.h = video.videoHeight;
+        };
+      }
+    }
+    render (context: CanvasRenderingContext2D, options?: any) {
+      context.save();
+      var t = this.transform;
+      context.transform(t.a, t.b, t.c, t.d, t.tx, t.ty);
+      if (options && options.alpha) {
+        context.globalAlpha = this.alpha;
+      }
+      if (options && options.snap) {
+        context.save();
+        context.setTransform(1, 0, 0, 1, t.tx | 0, t.ty | 0);
+        context.drawImage(this.video, 0, 0);
+        context.restore();
+      } else {
+        context.drawImage(this.video, 0, 0);
+      }
+      if (options && options.alpha) {
+        context.globalAlpha = 1;
+      }
+      context.restore();
+    }
   }
 }

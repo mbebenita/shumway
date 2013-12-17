@@ -147,6 +147,7 @@ limitations under the License.
     <script src="../../src/avm1/interpreter.js"></script>
     <script> console.timeEnd("Load AVM1 Dependencies"); </script>
 
+
     <script>
       window.print = function (msg) {
         console.log.apply(console, arguments);
@@ -163,6 +164,7 @@ limitations under the License.
         }
         return undefined;
       }
+
     </script>
 
     <!-- Load AVM2 Dependencies -->
@@ -171,6 +173,16 @@ limitations under the License.
     <script src="../../src/avm2/settings.js"></script>
     <script src="../../src/avm2/avm2Util.js"></script>
     <script src="../../src/avm2/metrics.js"></script>
+
+    <!-- Load Stage Dependencies -->
+    <script src="../../src/stage/util.js"></script>
+    <script src="../../src/stage/geometry.js"></script>
+    <script src="../../src/stage/stage.js"></script>
+    <script src="../../src/stage/elements.js"></script>
+    <script src="../../src/stage/filters.js"></script>
+    <script src="../../src/stage/gl.js"></script>
+    <script src="../../src/stage/gl/core.js"></script>
+
 
     <script>
       var Counter = new metrics.Counter(true);
@@ -185,8 +197,25 @@ limitations under the License.
       document.createElement = function (x) {
         Counter.count("createElement: " + x);
         return nativeCreateElement.call(document, x);
-      }
+      };
 
+      var Point = Shumway.Geometry.Point;
+      var Rectangle = Shumway.Geometry.Rectangle;
+      var Matrix = Shumway.Geometry.Matrix;
+      var Stage = Shumway.Layers.Stage;
+      var Snow = Shumway.Layers.Elements.Snow;
+      var Flake = Shumway.Layers.Elements.Flake;
+      var SolidRectangle = Shumway.Layers.Elements.SolidRectangle;
+      var Bitmap = Shumway.Layers.Elements.Bitmap;
+      var Video = Shumway.Layers.Elements.Video;
+      var Text = Shumway.Layers.Elements.Text;
+      var Shape = Shumway.Layers.Elements.Shape;
+      var Slider = Shumway.Layers.Elements.Slider;
+      var BlurFilter = Shumway.Layers.BlurFilter;
+      var WebGLContext = Shumway.GL.WebGLContext;
+      var WebGLStageRenderer = Shumway.GL.WebGLStageRenderer;
+
+      Shumway.GL.SHADER_ROOT = "../../src/stage/shaders/";
     </script>
 
     <script src="../../src/avm2/constants.js"></script>

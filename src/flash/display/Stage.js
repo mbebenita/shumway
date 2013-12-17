@@ -101,6 +101,15 @@ var StageDefinition = (function () {
       var stack = this._children.slice();
       var zindex = 0;
 
+      this.visit(function (o) {
+        var t = o._currentTransform;
+        o._frame.transform = new Matrix (
+          t.a, t.b, t.c, t.d, t.tx / 20, t.ty / 20
+        );
+        o._frame.w = o.width / 20;
+        o._frame.h = o.height / 20;
+      });
+
       var displayList = this._displayList;
 
       stack.reverse();

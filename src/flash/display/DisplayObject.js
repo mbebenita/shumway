@@ -88,6 +88,8 @@ var DisplayObjectDefinition = (function () {
       this._invisible = false;
       this._zindex = 0;
 
+      this._frame = new SolidRectangle();
+
       blendModes = [
         blendModeClass.NORMAL,     // 0
         blendModeClass.NORMAL,     // 1
@@ -1004,6 +1006,17 @@ var DisplayObjectDefinition = (function () {
       var listenerLists = this._listeners;
       for (var type in listenerLists) {
         avm2.systemDomain.onMessage.unregister(type, this._onBroadcastMessage);
+      }
+    },
+    visit: function (visitor) {
+      var stack = [this];
+      while (stack.length > 0) {
+        var that = stack.pop();
+        var children = that._children;
+        for (var i = 0; i < children.length; i++) {
+          stack.push(children[i]);
+        }
+        visitor(that);
       }
     }
   };

@@ -18,11 +18,23 @@
 /*global SWF, renderStage, rgbaObjToStr, ShumwayKeyboardListener, forceHidpi */
 
 SWF.embed = function(file, doc, container, options) {
+
+  var stageCanvas = doc.createElement('canvas');
+  stageCanvas.style.backgroundColor = "red";
+
+
+  var stageCanvasContext = new WebGLContext(stageCanvas);
+  var stageRenderer = new WebGLStageRenderer(stageCanvasContext);
+  var stageStage = new Stage(640, 480);
+
   var canvas = doc.createElement('canvas');
   var ctx = canvas.getContext('2d');
   var loader = new flash.display.Loader();
   var loaderInfo = loader._contentLoaderInfo;
   var stage = new flash.display.Stage();
+
+  stage._frame = stageStage;
+  stage._renderer = stageRenderer;
 
   var pixelRatio = 1;
   var forceHidpiSetting = forceHidpi.value;
@@ -37,17 +49,17 @@ SWF.embed = function(file, doc, container, options) {
 
   function setCanvasSize(width, height) {
     if (pixelRatio === 1.0) {
-      canvas.width = width | 0;
-      canvas.height = height | 0;
+      stageCanvas.width = canvas.width = width | 0;
+      stageCanvas.height = canvas.height = height | 0;
       return;
     }
     var canvasWidth = Math.floor(width * pixelRatio);
     var canvasHeight = Math.floor(height * pixelRatio);
     // trying fit into fractional amount of pixels if pixelRatio is not int
-    canvas.style.width = (canvasWidth / pixelRatio) + 'px';
-    canvas.style.height = (canvasHeight / pixelRatio) + 'px';
-    canvas.width = canvasWidth;
-    canvas.height = canvasHeight;
+    stageCanvas.style.width = canvas.style.width = (canvasWidth / pixelRatio) + 'px';
+    stageCanvas.style.height = canvas.style.height = (canvasHeight / pixelRatio) + 'px';
+    stageCanvas.width = canvas.width = canvasWidth;
+    stageCanvas.height = canvas.height = canvasHeight;
   }
 
   function fitCanvas(container) {
@@ -185,12 +197,14 @@ SWF.embed = function(file, doc, container, options) {
     root._dispatchEvent("addedToStage");
 
     container.appendChild(canvas);
+    container.appendChild(stageCanvas);
 
     if (options.onStageInitialized) {
       options.onStageInitialized(stage);
     }
 
     renderStage(stage, ctx, options);
+
   });
 
   if (options.onComplete) {
