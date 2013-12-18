@@ -1,3 +1,4 @@
+/// <reference path='shapes.ts'/>
 /// <reference path='geometry.ts'/>
 /// <reference path='stage.ts'/>
 /// <reference path='filters.ts'/>

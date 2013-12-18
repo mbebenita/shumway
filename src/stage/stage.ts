@@ -6,6 +6,12 @@ module Shumway.Layers {
   import DirtyRegion = Shumway.Geometry.DirtyRegion;
   import Filter = Shumway.Layers.Filter;
 
+  export interface ISource {
+    properties: {[name: string]: any}
+    getBounds (): Rectangle;
+    render (context: CanvasRenderingContext2D);
+  }
+
   export class Frame implements Shumway.IRenderable {
     private _x: number;
     private _y: number;
@@ -15,6 +21,7 @@ module Shumway.Layers {
     private _rotation: number;
     private _transform: Matrix;
     private _isTransformInvalid: boolean = true;
+    public properties: {[name: string]: any} = {};
 
     get x(): number {
       return this._x;
@@ -142,7 +149,6 @@ module Shumway.Layers {
       context.save();
       var t = this.transform;
       context.transform(t.a, t.b, t.c, t.d, t.tx, t.ty);
-
       context.restore();
     }
 
@@ -311,6 +317,24 @@ module Shumway.Layers {
   }
 
   export class Shape extends Frame {
+    source: ISource;
+    constructor(source: ISource) {
+      super();
+      this.source = source;
+      var bounds = source.getBounds();
+      this.w = bounds.w;
+      this.h = bounds.h;
+    }
+    render(context: CanvasRenderingContext2D) {
+      var m = this.transform;
+      context.save();
+      context.setTransform(m.a, m.b, m.c, m.d, m.tx, m.ty);
+      this.source.render(context);
+      context.restore();
+    }
+  }
+
+  export class Shape2 extends Frame {
     canvas: HTMLCanvasElement;
     renderer: (context: CanvasRenderingContext2D) => void;
     cacheAsBitmap: boolean;
@@ -382,14 +406,6 @@ module Shumway.Layers {
     constructor(video: any) {
       super();
       var that = this;
-//      var events = 'loadstart,suspend,abort,error,emptied,stalled,loadedmetadata,loadeddata,canplay,canplaythrough,playing,waiting,seeking,seeked,ended,durationchange,timeupdate,progress,play,pause,ratechange,volumechange'.split(',');
-//      for (var i = 0; i < events.length; i++) {
-//        this.video["on" + events[i]] = (function (name) {
-//          return function () {
-//            console.info("Event: " + name);
-//          }
-//        })(events[i])
-//      }
       this.video = video;
       if (video.videoWidth && video.videoHeight) {
         this.w = video.videoWidth;

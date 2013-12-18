@@ -5,7 +5,7 @@
 </head>
 <body style="background-color: #333333;">
   <script src="tween.js"></script>
-  <script src="shapes.js"></script>
+
   <script src="../avm2/options.js"></script>
   <script>
     var Option = options.Option;
@@ -24,6 +24,7 @@
   <script src="filters.js"></script>
   <script src="gl.js"></script>
   <script src="gl/core.js"></script>
+  <script src="shapes.js"></script>
   <script>
     var Point = Shumway.Geometry.Point;
     var Rectangle = Shumway.Geometry.Rectangle;
@@ -35,6 +36,7 @@
     var Video = Shumway.Layers.Video;
     var Text = Shumway.Layers.Text;
     var Shape = Shumway.Layers.Shape;
+
     var BlurFilter = Shumway.Layers.BlurFilter;
     var WebGLContext = Shumway.GL.WebGLContext;
     var WebGLStageRenderer = Shumway.GL.WebGLStageRenderer;
@@ -86,8 +88,9 @@
         var w = 128, h = 128;
         var x = Math.max(0, Math.random() * (canvas.width - w));
         var y = Math.max(0, Math.random() * (canvas.height - h));
-        var s = 0.5;
-        var s = 0.25 + Math.random() * 4;
+        var s = 1;
+        // var s = 0.5;
+        var s = 0.25 + Math.random() * 2;
         // var s = (Math.random() - 0.5) * 4;
         tween.easing(easing);
         tween.delay(Math.random() * (500000 / sceneOptions.movement));
@@ -236,7 +239,7 @@
     } else {
       context = canvas.getContext("2d");
     }
-    context.font = 12 + 'px Consolas, "Liberation Mono", Courier, monospace';
+    context.font = 14 + 'px Georgia, serif';
 
     var stage, animators;
 
@@ -281,9 +284,9 @@
       animators.push(snow);
       stage.addChild(snow);
 
-      var fontAtlas = new FontAtlas("12px Consolas");
+      // var fontAtlas = new FontAtlas("12px Georgia, serif");
       // document.addChild(fontAtlas.canvas);
-      document.getElementById("container").appendChild(fontAtlas.canvas);
+      // document.getElementById("container").appendChild(fontAtlas.canvas);
 
       for (var i = 0; i < sceneOptions.text; i++) {
         var frame = new Shape(renderTextShape(randomText()), 256, 200, sceneOptions.cacheAsBitmap);
@@ -295,7 +298,15 @@
       }
 
       for (var i = 0; i < sceneOptions.shapes; i++) {
-        var frame = new Shape(renderGuy, 600, 400, sceneOptions.cacheAsBitmap);
+        var source = {
+          getBounds: function () {
+            return new Rectangle(0, 0, 100, 100);
+          },
+          render: renderGuy,
+          properties: {}
+        };
+
+        var frame = new Shape(Shumway.getRandomShape());
         // var frame = new Shape(renderGuy, 100, 110, sceneOptions.cacheAsBitmap);
         frame.x = (Math.random()) * canvas.width;
         frame.y = (Math.random()) * canvas.height;

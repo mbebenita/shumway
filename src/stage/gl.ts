@@ -205,6 +205,7 @@ module Shumway.GL {
 
     constructor (canvas: HTMLCanvasElement) {
       this._canvas = canvas;
+
       this.gl = <WebGLRenderingContext> (
         canvas.getContext("experimental-webgl", {
           preserveDrawingBuffer: true,
@@ -234,11 +235,32 @@ module Shumway.GL {
 
     }
 
-    public cacheImageElement(image: HTMLImageElement): WebGLTextureRegion {
-      return this.cacheImage(image, image.width, image.height, false, false);
+    public cacheImage(image: any, solitary: boolean): WebGLTextureRegion {
+      var w = image.width;
+      var h = image.height;
+      var region: Rectangle, texture: WebGLTexture;
+      if (!solitary) {
+        for (var i = 0; i < this._textures.length; i++) {
+          texture = this._textures[i];
+          region = texture.atlas.insert(image, w, h);
+          if (region) {
+            break;
+          }
+        }
+      }
+      if (!region) {
+        var aw = solitary ? w : 1024;
+        var ah = solitary ? h : 1024;
+        texture = this.createTexture(aw, ah, solitary);
+        this._textures.push(texture);
+        region = texture.atlas.insert(image, w, h);
+        assert (region);
+      }
+      traceLevel >= TraceLevel.Verbose && writer.writeLn("Uploading Image: @ " + region);
+      return new WebGLTextureRegion(texture, region);
     }
 
-    public cacheImage(image: any, w: number, h: number, solitary: boolean, update: boolean): WebGLTextureRegion {
+    public cacheImage2(image: any, w: number, h: number, solitary: boolean, update: boolean): WebGLTextureRegion {
       var textureRegion: WebGLTextureRegion = image.textureRegion;
       if (textureRegion) {
         if (update) {
@@ -547,6 +569,9 @@ module Shumway.GL {
 
     private _tmpVertices: Vertex [] = Vertex.createEmptyVertices(Vertex, 64);
 
+    private _scratchCanvas: HTMLCanvasElement;
+    private _scratchCanvasContext: CanvasRenderingContext2D;
+
     constructor(context: WebGLContext) {
       this.context = context;
 
@@ -555,7 +580,20 @@ module Shumway.GL {
 
       this._stencilBrushGeometry = new WebGLGeometry(context);
       this._stencilBrush = new WebGLCombinedBrush(context, this._stencilBrushGeometry);
+
+      this._scratchCanvas = document.createElement("canvas");
+      this._scratchCanvas.width = 1024;
+      this._scratchCanvas.height = 1024;
+      this._scratchCanvasContext = this._scratchCanvas.getContext("2d");
     }
+
+//    private cacheImage(object, image): WebGLTextureRegion {
+//      var src: WebGLTextureRegion = object["CachedWebGLTextureRegion"];
+//      if (!src) {
+//        src = object["CachedWebGLTextureRegion"] = this.context.cacheImage(image, false);
+//      }
+//      return src;
+//    }
 
     public render(stage: Stage, options: any) {
       var that = this;
@@ -577,6 +615,7 @@ module Shumway.GL {
         stencilBrush.fillRectangle(rectangle, Color.Black, identity);
       }
 
+      var image;
       stage.visit(function (frame: Frame, transform?: Matrix) {
         that.context.setTransform(transform);
         if (frame instanceof Bitmap) {
@@ -584,7 +623,10 @@ module Shumway.GL {
           if (!source.image.complete) {
             return;
           }
-          var src: WebGLTextureRegion = this.context.cacheImage(source.image, source.image.width, source.image.height, false, false);
+          var src: WebGLTextureRegion = source.image["CachedWebGLTextureRegion"];
+          if (!src) {
+            src = source.image["CachedWebGLTextureRegion"] = context.cacheImage(source.image, false);
+          }
           brush.drawImage(src, undefined, new Color(1, 1, 1, frame.alpha), transform);
         } else if (frame instanceof Flake) {
           brush.fillRectangle(new Rectangle(0, 0, frame.w, frame.h), Color.parseColor((<Flake>frame).fillStyle), transform);
@@ -594,10 +636,14 @@ module Shumway.GL {
           // that.renderVideo(<Video>frame, transform);
         } else if (frame instanceof Shape) {
           var shape = <Shape>frame;
-          if (!shape.canvas) {
-            shape.cache();
+          var src: WebGLTextureRegion = shape.source.properties["CachedWebGLTextureRegion"];
+          if (!src) {
+            var bounds = shape.source.getBounds();
+            that._scratchCanvasContext.clearRect(0, 0, that._scratchCanvas.width, that._scratchCanvas.height);
+            shape.source.render(that._scratchCanvasContext);
+            var image: ImageData = that._scratchCanvasContext.getImageData(0, 0, bounds.w, bounds.h);
+            src = shape.source.properties["CachedWebGLTextureRegion"] = context.cacheImage(image, false);
           }
-          var src: WebGLTextureRegion = this.context.cacheImage(shape.canvas, shape.canvas.width, shape.canvas.height, false, false);
           brush.drawImage(src, undefined, new Color(1, 1, 1, frame.alpha), transform);
         }
       }, stage.transform);
