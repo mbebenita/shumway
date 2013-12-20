@@ -12,6 +12,8 @@ declare function assert(...args : any[]);
 declare function unexpected(...args : any[]);
 declare function notImplemented(...args : any[]);
 declare var release;
+declare var Counter: any;
+declare var FrameCounter: any;
 
 declare class IndentingWriter {
   writeLn(str: string);
@@ -31,10 +33,13 @@ interface WebGLTexture {
   h: number;
   atlas: Shumway.GL.WebGLTextureAtlas;
   framebuffer: WebGLFramebuffer;
+  regions: Shumway.GL.WebGLTextureRegion [];
 }
 
 module Shumway {
   export interface IRenderable {
-    render (context : CanvasRenderingContext2D, options? : any);
+    getBounds(): Shumway.Geometry.Rectangle;
+    properties: {[name: string]: any};
+    render (context: CanvasRenderingContext2D, options? : any);
   }
 }

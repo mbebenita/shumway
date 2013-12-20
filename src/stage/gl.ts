@@ -19,13 +19,17 @@ module Shumway.GL {
 
   import Frame = Shumway.Layers.Frame;
   import Stage = Shumway.Layers.Stage;
-  import Bitmap = Shumway.Layers.Bitmap;
   import Shape = Shumway.Layers.Shape;
   import Flake = Shumway.Layers.Elements.Flake;
   import SolidRectangle = Shumway.Layers.SolidRectangle;
   import Video = Shumway.Layers.Video;
   import Filter = Shumway.Layers.Filter;
   import BlurFilter = Shumway.Layers.BlurFilter;
+
+  function count(name) {
+    Counter.count(name);
+    FrameCounter.count(name);
+  }
 
   export var SHADER_ROOT = "shaders/";
 
@@ -116,6 +120,7 @@ module Shumway.GL {
     constructor(texture: WebGLTexture, region: Rectangle) {
       this.texture = texture;
       this.region = region;
+      this.texture.regions.push(this);
     }
   }
 
@@ -141,8 +146,8 @@ module Shumway.GL {
       this.texture = texture;
       this._w = w;
       this._h = h;
-      this._rectanglePacker = new RectanglePacker(w, h, solitary ? 0 : 2);
       this._solitary = solitary;
+      this.reset();
     }
 
     insert(image: any, w: number, h: number): Rectangle {
@@ -153,6 +158,7 @@ module Shumway.GL {
       }
       gl.bindTexture(gl.TEXTURE_2D, this.texture);
       gl.texSubImage2D(gl.TEXTURE_2D, 0, region.x, region.y, gl.RGBA, gl.UNSIGNED_BYTE, image);
+      count("texSubImage2D");
       return region;
     }
 
@@ -162,11 +168,16 @@ module Shumway.GL {
       gl.texSubImage2D(gl.TEXTURE_2D, 0, region.x, region.y, gl.RGBA, gl.UNSIGNED_BYTE, image);
       return region;
     }
+
+    reset() {
+      this._rectanglePacker = new RectanglePacker(this._w, this._h, this._solitary ? 0 : 2);
+    }
   }
 
   export class WebGLContext {
-    public gl: WebGLRenderingContext;
+    private static MAX_TEXTURES = 8;
 
+    public gl: WebGLRenderingContext;
     private _canvas: HTMLCanvasElement;
     private _w: number;
     private _h: number;
@@ -179,6 +190,8 @@ module Shumway.GL {
     private _fillColor: Color = Color.Red;
 
     private _textures: WebGLTexture [];
+
+
     scratch: WebGLTexture [];
 
     get width(): number {
@@ -251,7 +264,11 @@ module Shumway.GL {
       if (!region) {
         var aw = solitary ? w : 1024;
         var ah = solitary ? h : 1024;
-        texture = this.createTexture(aw, ah, solitary);
+        if (this._textures.length === WebGLContext.MAX_TEXTURES) {
+          texture = this.recycleTexture();
+        } else {
+          texture = this.createTexture(aw, ah, solitary);
+        }
         this._textures.push(texture);
         region = texture.atlas.insert(image, w, h);
         assert (region);
@@ -260,39 +277,16 @@ module Shumway.GL {
       return new WebGLTextureRegion(texture, region);
     }
 
-    public cacheImage2(image: any, w: number, h: number, solitary: boolean, update: boolean): WebGLTextureRegion {
-      var textureRegion: WebGLTextureRegion = image.textureRegion;
-      if (textureRegion) {
-        if (update) {
-          textureRegion.texture.atlas.update(image, textureRegion.region);
-          traceLevel >= TraceLevel.Verbose && writer.writeLn("Updating Image: @ " + textureRegion.region);
-        }
-        return textureRegion;
+    private recycleTexture(): WebGLTexture {
+      // var texture: WebGLTexture = this._textures.shift();
+      var texture: WebGLTexture = this._textures.splice(Math.random() * this._textures.length | 0, 1)[0];
+      var regions = texture.regions;
+      for (var i = 0; i < regions.length; i++) {
+        regions[i].texture = null;
       }
-      var region: Rectangle, texture: WebGLTexture;
-      if (!solitary) {
-        for (var i = 0; i < this._textures.length; i++) {
-          texture = this._textures[i];
-          region = texture.atlas.insert(image, w, h);
-          if (region) {
-            break;
-          }
-        }
-      }
-      if (!region) {
-        var aw = solitary ? w : 1024;
-        var ah = solitary ? h : 1024;
-        texture = this.createTexture(aw, ah, solitary);
-        this._textures.push(texture);
-        region = texture.atlas.insert(image, w, h);
-        assert (region);
-      }
-      traceLevel >= TraceLevel.Verbose && writer.writeLn("Uploading Image: @ " + region);
-      return (image.textureRegion = new WebGLTextureRegion(texture, region));
-    }
-
-    private freeImage(image: HTMLImageElement) {
-
+      texture.atlas.reset();
+      count("evictTexture");
+      return texture;
     }
 
     private updateViewport() {
@@ -386,6 +380,7 @@ module Shumway.GL {
       texture.h = h;
       texture.atlas = new WebGLTextureAtlas(this, texture, w, h, solitary);
       texture.framebuffer = this.createFramebuffer(texture);
+      texture.regions = [];
       return texture;
     }
 
@@ -600,10 +595,10 @@ module Shumway.GL {
       var context = this.context;
 
       var brush = this._brush;
-      this._brushGeometry.clear();
+      brush.reset();
 
       var stencilBrush = this._stencilBrush;
-      this._stencilBrushGeometry.clear();
+      stencilBrush.reset();
 
       var rectangles: Rectangle [] = [];
       stage.gatherDirtyRegions(rectangles);
@@ -618,17 +613,7 @@ module Shumway.GL {
       var image;
       stage.visit(function (frame: Frame, transform?: Matrix) {
         that.context.setTransform(transform);
-        if (frame instanceof Bitmap) {
-          var source: Bitmap = <Bitmap>frame;
-          if (!source.image.complete) {
-            return;
-          }
-          var src: WebGLTextureRegion = source.image["CachedWebGLTextureRegion"];
-          if (!src) {
-            src = source.image["CachedWebGLTextureRegion"] = context.cacheImage(source.image, false);
-          }
-          brush.drawImage(src, undefined, new Color(1, 1, 1, frame.alpha), transform);
-        } else if (frame instanceof Flake) {
+        if (frame instanceof Flake) {
           brush.fillRectangle(new Rectangle(0, 0, frame.w, frame.h), Color.parseColor((<Flake>frame).fillStyle), transform);
         } else if (frame instanceof SolidRectangle) {
           brush.fillRectangle(new Rectangle(0, 0, frame.w, frame.h), Color.parseColor((<SolidRectangle>frame).fillStyle), transform);
@@ -636,15 +621,21 @@ module Shumway.GL {
           // that.renderVideo(<Video>frame, transform);
         } else if (frame instanceof Shape) {
           var shape = <Shape>frame;
-          var src: WebGLTextureRegion = shape.source.properties["CachedWebGLTextureRegion"];
-          if (!src) {
-            var bounds = shape.source.getBounds();
-            that._scratchCanvasContext.clearRect(0, 0, that._scratchCanvas.width, that._scratchCanvas.height);
-            shape.source.render(that._scratchCanvasContext);
-            var image: ImageData = that._scratchCanvasContext.getImageData(0, 0, bounds.w, bounds.h);
-            src = shape.source.properties["CachedWebGLTextureRegion"] = context.cacheImage(image, false);
+          var bounds = shape.source.getBounds();
+          if (!bounds.isEmpty()) {
+            var src: WebGLTextureRegion = shape.source.properties["CachedWebGLTextureRegion"];
+            if (!src || !src.texture) {
+              that._scratchCanvasContext.clearRect(0, 0, that._scratchCanvas.width, that._scratchCanvas.height);
+              shape.source.render(that._scratchCanvasContext);
+              var image: ImageData = that._scratchCanvasContext.getImageData(0, 0, bounds.w, bounds.h);
+              src = shape.source.properties["CachedWebGLTextureRegion"] = context.cacheImage(image, false);
+            }
+            if (!brush.drawImage(src, undefined, new Color(1, 1, 1, frame.alpha), transform)) {
+              brush.draw();
+              brush.reset();
+              brush.drawImage(src, undefined, new Color(1, 1, 1, frame.alpha), transform);
+            }
           }
-          brush.drawImage(src, undefined, new Color(1, 1, 1, frame.alpha), transform);
         }
       }, stage.transform);
 
@@ -852,6 +843,11 @@ module Shumway.GL {
       WebGLCombinedBrushVertex.initializeAttributeList(this.context);
     }
 
+    public reset() {
+      this.textures = [];
+      this.geometry.reset();
+    }
+
     public drawImage(src: WebGLTextureRegion, dstRectangle: Rectangle, color: Color, transform: Matrix) {
       if (!dstRectangle) {
         dstRectangle = new Rectangle(0, 0, src.region.w, src.region.h);
@@ -862,7 +858,8 @@ module Shumway.GL {
       if (sampler < 0) {
         this.textures.push(src.texture);
         if (this.textures.length > 8) {
-          notImplemented("Can't handle more than 8 texture samplers.");
+          return false;
+          notImplemented("Cannot handle more than 8 texture samplers.");
         }
         sampler = this.textures.length - 1;
       }
@@ -886,6 +883,7 @@ module Shumway.GL {
         vertex.writeTo(this.geometry);
       }
       this.geometry.addQuad();
+      return true;
     }
 
     public fillRectangle(rectangle: Rectangle, color: Color, transform: Matrix) {

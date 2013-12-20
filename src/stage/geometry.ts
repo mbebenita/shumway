@@ -460,7 +460,7 @@ module Shumway.Geometry {
       dst.transform(src.a, src.b, src.c, src.d, src.tx, src.ty);
     };
   }
-  export class DirtyRegion implements Shumway.IRenderable {
+  export class DirtyRegion {
     private static tmpRectangle = Rectangle.createEmpty();
     private grid: DirtyRegion.Cell [][];
 

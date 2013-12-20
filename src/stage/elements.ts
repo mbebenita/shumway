@@ -41,7 +41,7 @@ module Shumway.Layers.Elements {
     }
   }
 
-  export class TextLine extends Frame implements Shumway.IRenderable {
+  export class TextLine extends Frame {
     text: string;
     constructor(text: string) {
       super();
@@ -49,7 +49,7 @@ module Shumway.Layers.Elements {
     }
   }
 
-  export class Flake extends Frame implements Shumway.IRenderable {
+  export class Flake extends Frame {
     radius: number;
     density: number;
     rotationSpeed: number;

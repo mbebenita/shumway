@@ -13,6 +13,7 @@
     var coreOptions = new OptionSet("Core Options");
   </script>
   <script src="../avm2/avm2Util.js"></script>
+  <script src="../avm2/metrics.js"></script>
   <script src="../swf/util.js"></script>
   <script src="../flash/util.js"></script>
   <script src="../../examples/inspector/js/classes/Timeline.js"></script>
@@ -41,6 +42,9 @@
     var WebGLContext = Shumway.GL.WebGLContext;
     var WebGLStageRenderer = Shumway.GL.WebGLStageRenderer;
     var FontAtlas = Shumway.Layers.Elements.FontAtlas;
+
+    var Counter = new metrics.Counter(true);
+    var FrameCounter = new metrics.Counter(true);
   </script>
   <style>
     #debugInfoContainer {
@@ -80,6 +84,7 @@
   <div id="container" style="clear: both;">
   </div>
   <script>
+    var writer = new IndentingWriter();
 
     function shuffle(target, easing) {
       var tween = new TWEEN.Tween(target);
@@ -156,6 +161,7 @@
     var sceneOptions = {
       flakes: 1,
       shapes: 0,
+      sprites: 0,
       bitmaps: 2,
       videos: 2,
       text: 1,
@@ -189,6 +195,7 @@
       var c = [];
       c.push(f.add(sceneOptions, "flakes", 0, 50000).step(1));
       c.push(f.add(sceneOptions, "shapes", 0, 1000).step(1));
+      c.push(f.add(sceneOptions, "sprites", 0, 1000).step(1));
       c.push(f.add(sceneOptions, "bitmaps", 0, 10000).step(2));
       c.push(f.add(sceneOptions, "videos", 0, 1000).step(1));
       c.push(f.add(sceneOptions, "text", 0, 1000).step(1));
@@ -298,15 +305,17 @@
       }
 
       for (var i = 0; i < sceneOptions.shapes; i++) {
-        var source = {
-          getBounds: function () {
-            return new Rectangle(0, 0, 100, 100);
-          },
-          render: renderGuy,
-          properties: {}
-        };
-
         var frame = new Shape(Shumway.getRandomShape());
+        // var frame = new Shape(renderGuy, 100, 110, sceneOptions.cacheAsBitmap);
+        frame.x = (Math.random()) * canvas.width;
+        frame.y = (Math.random()) * canvas.height;
+        frame.alpha = Math.random();
+        stage.addChild(frame);
+        shuffle(frame, TWEEN.Easing.Exponential.Out);
+      }
+
+      for (var i = 0; i < sceneOptions.sprites; i++) {
+        var frame = new Shape(Shumway.getSpriteShape(i));
         // var frame = new Shape(renderGuy, 100, 110, sceneOptions.cacheAsBitmap);
         frame.x = (Math.random()) * canvas.width;
         frame.y = (Math.random()) * canvas.height;
@@ -317,23 +326,24 @@
 
       var image = document.createElement("img");
       image.src = "assets/firefox_logo_small.png";
-
-      for (var i = 0; i < sceneOptions.bitmaps; i++) {
-        var frame = new Bitmap(image);
-        frame.x = (Math.random()) * canvas.width;
-        frame.y = (Math.random()) * canvas.height;
-        frame.alpha = Math.random();
-        if (false || Math.random() < 0.5) {
-          frame.filters = [new BlurFilter(10, 10)];
+      image.addEventListener("load", function () {
+        for (var i = 0; i < sceneOptions.bitmaps; i++) {
+          var frame = new Shape(Shumway.getImageShape(image));
+          frame.x = (Math.random()) * canvas.width;
+          frame.y = (Math.random()) * canvas.height;
+          frame.alpha = Math.random();
+          if (false || Math.random() < 0.5) {
+            frame.filters = [new BlurFilter(10, 10)];
+          }
+          if (Math.random() < 0.1) {
+            frame.mask = new Flake(20, 20);
+            frame.mask.x = 10;
+            frame.mask.y = 10;
+          }
+          stage.addChild(frame);
+          shuffle(frame, TWEEN.Easing.Exponential.Out);
         }
-        if (Math.random() < 0.1) {
-          frame.mask = new Flake(20, 20);
-          frame.mask.x = 10;
-          frame.mask.y = 10;
-        }
-        stage.addChild(frame);
-        shuffle(frame, TWEEN.Easing.Exponential.Out);
-      }
+      });
 
       for (var i = 0; i < sceneOptions.videos; i++) {
         ensureLoadedVideos();
@@ -357,18 +367,16 @@
 
     var mousePosition;
 
-    /*
-    window.requestAnimationFrame = (function(){
-      return function(callback) {
-        window.setTimeout(callback, 1000 / sceneOptions.frameRate);
-      };
-    })();
-    */
+//    window.requestAnimationFrame = (function(){
+//      return function(callback) {
+//        window.setTimeout(callback, 1000 / sceneOptions.frameRate);
+//      };
+//    })();
 
     var frames = 0;
 
     (function tick() {
-
+      FrameCounter.clear();
       for (var i = 0; i < videoElements.length; i++) {
         var videoElement = videoElements[i];
         var location = videoElement.textureAtlasLocation;
@@ -427,6 +435,13 @@
       }
 
       timelineLeave("FRAME");
+
+      // writer.writeLn("Counter");
+      // console.info(Counter.counts);
+
+      // writer.writeLn("Frame Counter");
+      // FrameCounter.trace(writer);
+
       stage.dirtyRegion.clear();
       if (frames ++ < 10000) {
         requestAnimationFrame(tick);

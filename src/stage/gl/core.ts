@@ -265,7 +265,7 @@ module Shumway.GL {
       this._elementOffset = 0;
     }
 
-    public clear() {
+    public reset() {
       this.array.reset();
       this.elementArray.reset();
       this.resetElementOffset();
