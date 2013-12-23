@@ -15,6 +15,7 @@ module Shumway.Layers {
     private _rotation: number;
     private _transform: Matrix;
     private _isTransformInvalid: boolean = true;
+    private _origin: Point = new Point(0, 0);
 
     get x(): number {
       return this._x;
@@ -73,10 +74,14 @@ module Shumway.Layers {
     get transform(): Matrix {
       if (this._isTransformInvalid) {
         this._transform.setIdentity();
-        this._transform.translate(-this.origin.x, -this.origin.y);
         this._transform.scale(this._scaleX, this._scaleY);
         this._transform.rotate(this._rotation * Math.PI / 180);
         this._transform.translate(this._x, this._y);
+
+        var t = Matrix.createIdentity();
+        t.translate(-this._origin.x, -this._origin.y);
+        t.concat(this._transform);
+        this._transform = t;
         this._isTransformInvalid = false;
       }
       return this._transform;
@@ -97,9 +102,18 @@ module Shumway.Layers {
     public h: number;
     public parent: Frame;
     public isInvalid: boolean;
-    public origin: Point = new Point(0, 0);
+
     public filters: Filter [];
     public mask: Frame;
+
+    get origin(): Point {
+      return this._origin;
+    }
+
+    set origin(value: Point) {
+      this._origin.set(value);
+      this.invalidateTransform();
+    }
 
     constructor () {
       this.parent = null;
@@ -137,13 +151,12 @@ module Shumway.Layers {
       this.invalidate();
     }
 
-
-    public render(context: CanvasRenderingContext2D, options?: any) {
-      context.save();
-      var t = this.transform;
-      context.transform(t.a, t.b, t.c, t.d, t.tx, t.ty);
-      context.restore();
-    }
+//    public render(context: CanvasRenderingContext2D, options?: any) {
+//      context.save();
+//      var t = this.transform;
+//      context.transform(t.a, t.b, t.c, t.d, t.tx, t.ty);
+//      context.restore();
+//    }
 
     public visit (visitor: (Frame, Matrix?) => void, transform: Matrix) {
       var stack: Frame [];
@@ -200,12 +213,47 @@ module Shumway.Layers {
       }
     }
 
-    public render(context: CanvasRenderingContext2D, options?: any) {
-      context.save();
-      for (var i = 0; i < this.children.length; i++) {
-        this.children[i].render(context, options);
+//    public render(context: CanvasRenderingContext2D, options?: any) {
+//      context.save();
+//      for (var i = 0; i < this.children.length; i++) {
+//        this.children[i].render(context, options);
+//      }
+//      context.restore();
+//    }
+  }
+
+  export class Canvas2DStageRenderer {
+    context: CanvasRenderingContext2D;
+    constructor(context: CanvasRenderingContext2D) {
+      this.context = context;
+    }
+
+    public render(stage: Stage, options: any) {
+      var context = this.context;
+      context.globalAlpha = 1;
+      context.fillStyle = "black";
+      context.fillRect(0, 0, stage.w, stage.h);
+      stage.visit(function (frame: Frame, transform?: Matrix) {
+        context.setTransform(transform.a, transform.b, transform.c, transform.d, transform.tx, transform.ty);
+        context.globalAlpha = frame.alpha;
+        if (frame instanceof Shape) {
+          var shape = <Shape>frame;
+          shape.source.render(context);
+        }
+      }, stage.transform);
+
+      if (options && options.drawLayers) {
+        function drawRectangle(rectangle: Rectangle) {
+          context.rect(rectangle.x, rectangle.y, rectangle.w, rectangle.h);
+        }
+        context.strokeStyle = "#FF4981";
+//        for (var i = 0; i < layers.length; i++) {
+//          context.beginPath();
+//          drawRectangle(layers[i]);
+//          context.closePath();
+//          context.stroke();
+//        }
       }
-      context.restore();
     }
   }
 
@@ -216,28 +264,6 @@ module Shumway.Layers {
       this.w = w;
       this.h = h;
       this.dirtyRegion = new DirtyRegion(w, h);
-    }
-
-    public render(context: CanvasRenderingContext2D, options?: any) {
-      // var layers = this.gatherLayers();
-      var layers = [];
-
-      context.strokeStyle = "#E0F8D8";
-      this.gatherDirtyRegions();
-      super.render(context, options);
-
-      if (options && options.drawLayers) {
-        function drawRectangle(rectangle: Rectangle) {
-          context.rect(rectangle.x, rectangle.y, rectangle.w, rectangle.h);
-        }
-        context.strokeStyle = "#FF4981";
-        for (var i = 0; i < layers.length; i++) {
-          context.beginPath();
-          drawRectangle(layers[i]);
-          context.closePath();
-          context.stroke();
-        }
-      }
     }
 
     gatherDirtyRegions(rectangles?: Rectangle[]) {
@@ -318,13 +344,13 @@ module Shumway.Layers {
       this.w = bounds.w;
       this.h = bounds.h;
     }
-    render(context: CanvasRenderingContext2D) {
-      var m = this.transform;
-      context.save();
-      context.setTransform(m.a, m.b, m.c, m.d, m.tx, m.ty);
-      this.source.render(context);
-      context.restore();
-    }
+//    render(context: CanvasRenderingContext2D) {
+//      var m = this.transform;
+//      context.save();
+//      context.setTransform(m.a, m.b, m.c, m.d, m.tx, m.ty);
+//      this.source.render(context);
+//      context.restore();
+//    }
   }
 
   export class Video extends Frame {

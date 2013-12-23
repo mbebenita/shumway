@@ -3,6 +3,7 @@
 
 module Shumway.GL {
   var traceLevel = 1;
+  var MAX_SIZE = 1024 * 4;
   enum TraceLevel {
     None,
     Brief,
@@ -223,7 +224,8 @@ module Shumway.GL {
         canvas.getContext("experimental-webgl", {
           preserveDrawingBuffer: true,
           antialias: true,
-          stencil: true
+          stencil: true,
+          // premultipliedAlpha: false
         })
       );
       assert (this.gl, "Cannot create WebGL context.");
@@ -244,6 +246,8 @@ module Shumway.GL {
       ];
 
       this.gl.blendFunc(this.gl.SRC_ALPHA, this.gl.ONE_MINUS_SRC_ALPHA);
+      // this.gl.blendFunc(this.gl.ONE, this.gl.ONE_MINUS_SRC_ALPHA);
+
       this.gl.enable(this.gl.BLEND);
 
     }
@@ -262,8 +266,8 @@ module Shumway.GL {
         }
       }
       if (!region) {
-        var aw = solitary ? w : 1024;
-        var ah = solitary ? h : 1024;
+        var aw = solitary ? w : MAX_SIZE;
+        var ah = solitary ? h : MAX_SIZE;
         if (this._textures.length === WebGLContext.MAX_TEXTURES) {
           texture = this.recycleTexture();
         } else {
@@ -550,7 +554,6 @@ module Shumway.GL {
       gl.clear(gl.COLOR_BUFFER_BIT);
       gl.disable(gl.SCISSOR_TEST);
     }
-
   }
 
   export class WebGLStageRenderer {
@@ -577,8 +580,8 @@ module Shumway.GL {
       this._stencilBrush = new WebGLCombinedBrush(context, this._stencilBrushGeometry);
 
       this._scratchCanvas = document.createElement("canvas");
-      this._scratchCanvas.width = 1024;
-      this._scratchCanvas.height = 1024;
+      this._scratchCanvas.width = MAX_SIZE;
+      this._scratchCanvas.height = MAX_SIZE;
       this._scratchCanvasContext = this._scratchCanvas.getContext("2d");
     }
 

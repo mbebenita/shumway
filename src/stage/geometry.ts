@@ -165,6 +165,10 @@ module Shumway.Geometry {
       this.h *= y;
     }
 
+    getCenter(): Point {
+      return new Point(this.x + this.w / 2, this.y + this.h / 2);
+    }
+
     toString(): string {
       return "{" +
         this.x + ", " +

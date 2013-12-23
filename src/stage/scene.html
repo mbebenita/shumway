@@ -41,6 +41,7 @@
     var BlurFilter = Shumway.Layers.BlurFilter;
     var WebGLContext = Shumway.GL.WebGLContext;
     var WebGLStageRenderer = Shumway.GL.WebGLStageRenderer;
+    var Canvas2DStageRenderer = Shumway.Layers.Canvas2DStageRenderer;
     var FontAtlas = Shumway.Layers.Elements.FontAtlas;
 
     var Counter = new metrics.Counter(true);
@@ -77,7 +78,8 @@
     <!--<video id="video" src="http://upload.wikimedia.org/wikipedia/commons/4/41/Big_Buck_Bunny_medium.ogv" controls="true"></video>-->
     <!--<video id="video" src="http://upload.wikimedia.org/wikipedia/commons/7/79/Big_Buck_Bunny_small.ogv" controls="true"></video>-->
     <!--<canvas id="stageCanvas" width="512" height="256" style="background-color: #1F1F21;"></canvas>-->
-    <canvas id="stageCanvas" style="background-color: #1F1F21;"></canvas>
+    <canvas id="webGLCanvas" style="background-color: black;"></canvas>
+    <canvas id="canvas2DCanvas" style="background-color: black;"></canvas>
     <!--<canvas id="stageCanvas" style="background-color: #1F1F21;"></canvas>-->
   </div>
 
@@ -91,8 +93,8 @@
       tween.easing(easing);
       function next() {
         var w = 128, h = 128;
-        var x = Math.max(0, Math.random() * (canvas.width - w));
-        var y = Math.max(0, Math.random() * (canvas.height - h));
+        var x = Math.max(0, Math.random() * (webGLCanvas.width - w));
+        var y = Math.max(0, Math.random() * (webGLCanvas.height - h));
         var s = 1;
         // var s = 0.5;
         var s = 0.25 + Math.random() * 2;
@@ -100,11 +102,11 @@
         tween.easing(easing);
         tween.delay(Math.random() * (500000 / sceneOptions.movement));
         tween.to({
-          x: x,
-          y: y,
-          scaleX: s,
-          scaleY: s,
-          rotation: (Math.random() - 0.5) * 180,
+          // x: x,
+          // y: y,
+          // scaleX: s,
+          // scaleY: s,
+          rotation: (Math.random() - 0.5) * 180 * 10,
           alpha: Math.random()
         }, 100000 / sceneOptions.speed).start();
 //        if (Math.random() < 0.1) {
@@ -139,24 +141,25 @@
       timeline && timeline.leave(name);
     }
 
-    var canvas = document.getElementById("stageCanvas");
+    var webGLCanvas = document.getElementById("webGLCanvas");
+    var canvas2DCanvas = document.getElementById("canvas2DCanvas");
 
     var pixelRatio = 'devicePixelRatio' in window ? window.devicePixelRatio : 1;
     // var pixelRatio = 1;
 
-    var width = window.innerWidth * 0.75 | 0;
-    var height = window.innerHeight * 0.75 | 0;
-
-//    var width = 512;
-//    var height = 512;
-
-    canvas.style.width = width + 'px';
-    canvas.style.height = height + 'px';
-    canvas.width = width * pixelRatio;
-    canvas.height = height * pixelRatio;
-
+    var width = (window.innerWidth * 0.8) | 0;
+    var height = (window.innerHeight * 0.8) | 0;
 
     var gui = new dat.GUI();
+
+    // var width = gui.domElement.offsetLeft - 10;
+
+    [webGLCanvas, canvas2DCanvas].forEach(function (canvas) {
+      canvas.style.width = width + 'px';
+      canvas.style.height = height + 'px';
+      canvas.width = width * pixelRatio;
+      canvas.height = height * pixelRatio;
+    });
 
     var sceneOptions = {
       flakes: 1,
@@ -167,6 +170,7 @@
       text: 1,
       cacheAsBitmap: false,
       webGL: false,
+      canvas2D: false,
 
       movement: 20,
       speed: 20,
@@ -200,11 +204,12 @@
       c.push(f.add(sceneOptions, "videos", 0, 1000).step(1));
       c.push(f.add(sceneOptions, "text", 0, 1000).step(1));
       c.push(f.add(sceneOptions, "cacheAsBitmap"));
-      c.push(f.add(sceneOptions, "webGL"));
-      f.open();
       c.forEach(function (x) {
         x.onFinishChange(updateScene);
       })
+      f.open();
+      c.push(f.add(sceneOptions, "webGL"));
+      c.push(f.add(sceneOptions, "canvas2D"));
     })();
 
     (function addOptions() {
@@ -230,8 +235,6 @@
       })
     })();
 
-
-
     (function addButtons() {
       var f = gui.addFolder("Commands");
       var c = [];
@@ -239,14 +242,11 @@
       f.open();
     })();
 
-    var context, renderer;
-    if (sceneOptions.webGL) {
-      context = new WebGLContext(canvas);
-      renderer = new WebGLStageRenderer(context);
-    } else {
-      context = canvas.getContext("2d");
-    }
-    context.font = 14 + 'px Georgia, serif';
+    var webGLContext, canvas2DContext, webGLStageRenderer, canvas2DStageRenderer;
+    webGLContext = new WebGLContext(webGLCanvas);
+    webGLStageRenderer = new WebGLStageRenderer(webGLContext);
+    canvas2DContext = canvas2DCanvas.getContext("2d");
+    canvas2DStageRenderer = new Canvas2DStageRenderer(canvas2DContext);
 
     var stage, animators;
 
@@ -284,6 +284,7 @@
     }
 
     function updateScene() {
+      var canvas = webGLCanvas;
       stage = new Stage(canvas.width, canvas.height);
       animators = [];
 
@@ -305,7 +306,11 @@
       }
 
       for (var i = 0; i < sceneOptions.shapes; i++) {
-        var frame = new Shape(Shumway.getRandomShape());
+        var shape = Shumway.getRandomShape();
+        var frame = new Shape(shape);
+        frame.origin = new Point(frame.w / 2, frame.h / 2);
+        // frame.origin.x = 0;
+        // frame.origin.y = 0;
         // var frame = new Shape(renderGuy, 100, 110, sceneOptions.cacheAsBitmap);
         frame.x = (Math.random()) * canvas.width;
         frame.y = (Math.random()) * canvas.height;
@@ -315,8 +320,9 @@
       }
 
       for (var i = 0; i < sceneOptions.sprites; i++) {
-        var frame = new Shape(Shumway.getSpriteShape(i));
-        // var frame = new Shape(renderGuy, 100, 110, sceneOptions.cacheAsBitmap);
+        var shape = Shumway.getSpriteShape(i)
+        var frame = new Shape(shape);
+        frame.origin = new Point(frame.w / 2, frame.h / 2);
         frame.x = (Math.random()) * canvas.width;
         frame.y = (Math.random()) * canvas.height;
         frame.alpha = Math.random();
@@ -399,18 +405,18 @@
         timelineLeave("ANIMATE");
       }
       if (sceneOptions.render) {
-        timelineEnter("RENDER");
         if (sceneOptions.webGL) {
-
-          /*
-          stage.render(context, {
-            drawLayers: sceneOptions.drawLayers,
-            snap: sceneOptions.snap,
-            alpha: sceneOptions.alpha
-          });
-          context.flush();
-          */
-
+          timelineEnter("WebGL");
+          webGLStageRenderer.render(stage, sceneOptions);
+          timelineLeave("WebGL");
+        }
+        if (sceneOptions.canvas2D) {
+          timelineEnter("Canvas2D");
+          canvas2DStageRenderer.render(stage, sceneOptions);
+          timelineLeave("Canvas2D");
+        }
+        /*
+        if (sceneOptions.webGL) {
           renderer.render(stage, sceneOptions);
         } else {
           if (sceneOptions.clear) {
@@ -430,8 +436,7 @@
             });
           }
         }
-
-        timelineLeave("RENDER");
+        */
       }
 
       timelineLeave("FRAME");
@@ -458,9 +463,9 @@
 
     var originalPosition;
 
-    canvas.addEventListener('mousemove', function(evt) {
-      mousePosition = getMousePosition(canvas, evt);
-    }, false);
+//    canvas.addEventListener('mousemove', function(evt) {
+//      mousePosition = getMousePosition(canvas, evt);
+//    }, false);
 
   </script>
 </body>

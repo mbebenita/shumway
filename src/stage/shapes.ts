@@ -70,7 +70,8 @@ module Shumway {
     new VectorShape(loadShape("sword.json")),
     new VectorShape(loadShape("decorate.json")),
     new VectorShape(loadShape("background.json")),
-    new VectorShape(loadShape("fire.json"))
+    new VectorShape(loadShape("fire.json")),
+    new VectorShape(loadShape("large.json"))
   ];
 
   loadShape("assets.json").forEach(function (shape) {
@@ -131,10 +132,13 @@ module Shumway {
     }
 
     render (context: CanvasRenderingContext2D) {
+      var bounds = this._bounds;
       context.save();
-      var p = this._bounds.w / 2;
+      // context.strokeStyle = randomStyle();
+      // context.strokeRect(0, 0, bounds.w, bounds.h);
+      var p = bounds.w / 2;
       context.fillStyle = randomStyle();
-      this.renderStar(context, p, p, this._bounds.w / 2, Math.random() * 16 | 0, 0.1 + Math.random() * 0.5);
+      this.renderStar(context, p, p, bounds.w / 2, Math.random() * 16 | 0, 0.1 + Math.random() * 0.5);
       // context.fillRect(0, 0, this._bounds.w, this._bounds.h);
       // context.fillStyle = "black";
       // context.font = 14 + 'px Consolas';
