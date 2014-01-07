@@ -10,18 +10,59 @@ module Shumway.Geometry {
       this.y = y;
     }
 
-    setElements (x: number, y: number) {
+    setElements (x: number, y: number): Point {
       this.x = x;
       this.y = y;
+      return this;
     }
 
-    set (other: Point) {
+    set (other: Point): Point {
       this.x = other.x;
       this.y = other.y;
+      return this;
+    }
+
+    dot (other: Point): number {
+      return this.x * other.x + this.y * other.y;
+    }
+
+    squaredLength (): number {
+      return this.dot(this);
+    }
+
+    sub (other: Point): Point {
+      this.x -= other.x;
+      this.y -= other.y;
+      return this;
+    }
+
+    mul (value: number): Point {
+      this.x *= value;
+      this.y *= value;
+      return this;
+    }
+
+    clone (): Point {
+      return new Point(this.x, this.y);
     }
 
     toString () {
       return "{x: " + this.x + ", y: " + this.y + "}";
+    }
+
+    inTriangle (a: Point, b: Point, c: Point) {
+      var s = a.y * c.x - a.x * c.y + (c.y - a.y) * this.x + (a.x - c.x) * this.y;
+      var t = a.x * b.y - a.y * b.x + (a.y - b.y) * this.x + (b.x - a.x) * this.y;
+      if ((s < 0) != (t < 0)) {
+        return false;
+      }
+      var T = -b.y * c.x + a.y * (c.x - b.x) + a.x * (b.y - c.y) + b.x * c.y;
+      if (T < 0.0) {
+        s = -s;
+        t = -t;
+        T = -T;
+      }
+      return s > 0 && t > 0 && (s + t) < T;
     }
 
     static createEmpty(): Point {
@@ -77,6 +118,10 @@ module Shumway.Geometry {
     }
 
     union (other: Rectangle) {
+      if (this.isEmpty()) {
+        this.set(other);
+        return;
+      }
       var x = this.x, y = this.y;
       if (this.x > other.x) {
         x = other.x;
@@ -180,6 +225,79 @@ module Shumway.Geometry {
 
     static createEmpty(): Rectangle {
       return new Rectangle(0, 0, 0, 0);
+    }
+
+    getCorners (points: Point[]) {
+      points[0].x = this.x;
+      points[0].y = this.y;
+
+      points[1].x = this.x + this.w;
+      points[1].y = this.y;
+
+      points[2].x = this.x + this.w;
+      points[2].y = this.y + this.h;
+
+      points[3].x = this.x;
+      points[3].y = this.y + this.h;
+    }
+  }
+
+  export class OBB {
+    axes: Point [];
+    corners: Point [];
+    origins: number [];
+    constructor(corners: Point []) {
+      this.corners = corners.map(function (corner) {
+        return corner.clone();
+      });
+      this.axes = [
+        corners[1].clone().sub(corners[0]),
+        corners[3].clone().sub(corners[0])
+      ];
+      this.origins = [];
+      for (var i = 0; i < 2; i++) {
+        this.axes[i].mul(1 / this.axes[i].squaredLength());
+        this.origins.push(corners[0].dot(this.axes[i]));
+      }
+    }
+    getBounds(): Rectangle {
+      var min = new Point(Number.MAX_VALUE, Number.MAX_VALUE);
+      var max = new Point(Number.MIN_VALUE, Number.MIN_VALUE);
+      for (var i = 0; i < 4; i++) {
+        var x = this.corners[i].x, y = this.corners[i].y;
+        min.x = Math.min(min.x, x);
+        min.y = Math.min(min.y, y);
+        max.x = Math.max(max.x, x);
+        max.y = Math.max(max.y, y);
+      }
+      return new Rectangle(min.x, min.y, max.x - min.x, max.y - min.y);
+    }
+    /**
+     * http://www.flipcode.com/archives/2D_OBB_Intersection.shtml
+     */
+    public intersects(other: OBB): boolean {
+      return this.intersectsOneWay(other) && other.intersectsOneWay(this);
+    }
+    private intersectsOneWay(other: OBB): boolean {
+      for (var i = 0; i < 2; i++) {
+        for (var j = 0; j < 4; j++) {
+          var t = other.corners[j].dot(this.axes[i]);
+          var tMin, tMax;
+          if (j === 0) {
+            tMax = tMin = t;
+          } else {
+            if (t < tMin) {
+              tMin = t;
+            } else if (t > tMax) {
+              tMax = t;
+            }
+          }
+        }
+        if ((tMin > 1 + this.origins[i]) || (tMax < this.origins[i])) {
+          return false;
+        }
+      }
+      return true;
     }
   }
 
@@ -823,7 +941,7 @@ module Shumway.Geometry {
         this._x = x;
         this._y = y;
       };
-      path.prototype.bezierCurveTo = function (cp1x, cp1y, cp2x, cp2y, x, y) {
+      path.prototype.bezierCurveTo = function (cbx, cp1y, ccx, ccy, x, y) {
         notImplemented("bezierCurveTo");
       };
       path.prototype.arcTo = function (x1, y1, x2, y2, radius) {
@@ -904,5 +1022,74 @@ module Shumway.Geometry {
       return simplePath;
     })();
     */
+  }
+
+  export class Tile {
+    x: number;
+    y: number;
+    index: number;
+    bounds: Rectangle;
+    _obb: OBB;
+    use: number = 0;
+    private static corners = Point.createEmptyPoints(4);
+    getOBB(): OBB {
+      if (this._obb) {
+        return this._obb;
+      }
+      this.bounds.getCorners(Tile.corners);
+      return this._obb = new OBB(Tile.corners);
+    }
+    constructor(index: number, x: number, y: number, size: number) {
+      this.index = index;
+      this.x = x;
+      this.y = y;
+      this.bounds = new Rectangle(x * size, y * size, size, size);
+    }
+  }
+
+  export class TileCache {
+    w: number;
+    h: number;
+    size: number;
+    rows: number;
+    columns: number;
+    tiles: Tile [];
+    private static points = Point.createEmptyPoints(4);
+    constructor(w: number, h: number, size: number) {
+      this.size = size;
+      this.w = w;
+      this.h = h;
+      this.rows = Math.ceil(h / size);
+      this.columns = Math.ceil(w / size);
+      this.tiles = [];
+      var index = 0;
+      for (var y = 0; y < this.rows; y++) {
+        for (var x = 0; x < this.columns; x++) {
+          this.tiles.push(new Tile(index++, x, y, size));
+        }
+      }
+    }
+    getTiles(query: Rectangle, transform: Matrix): Tile [] {
+      transform.transformRectangle(query, TileCache.points);
+      var queryOBB = new OBB(TileCache.points);
+      var queryBounds = new Rectangle(0, 0, this.w, this.h);
+      queryBounds.intersect(queryOBB.getBounds());
+
+      var minX = queryBounds.x / this.size | 0;
+      var minY = queryBounds.y / this.size | 0;
+      var maxX = Math.ceil((queryBounds.x + queryBounds.w) / this.size) | 0;
+      var maxY = Math.ceil((queryBounds.y + queryBounds.h) / this.size) | 0;
+
+      var tiles = [];
+      for (var x = minX; x < maxX; x++) {
+        for (var y = minY; y < maxY; y++) {
+          var tile = this.tiles[y * this.columns + x];
+          if (tile.getOBB().intersects(queryOBB)) {
+            tiles.push(tile);
+          }
+        }
+      }
+      return tiles;
+    }
   }
 }

@@ -5,6 +5,9 @@ module Shumway.Layers {
   import Matrix = Shumway.Geometry.Matrix;
   import DirtyRegion = Shumway.Geometry.DirtyRegion;
   import Filter = Shumway.Layers.Filter;
+  import TileCache = Shumway.Geometry.TileCache;
+  import Tile = Shumway.Geometry.Tile;
+  import OBB = Shumway.Geometry.OBB;
 
   export class Frame {
     private _x: number;
@@ -151,14 +154,7 @@ module Shumway.Layers {
       this.invalidate();
     }
 
-//    public render(context: CanvasRenderingContext2D, options?: any) {
-//      context.save();
-//      var t = this.transform;
-//      context.transform(t.a, t.b, t.c, t.d, t.tx, t.ty);
-//      context.restore();
-//    }
-
-    public visit (visitor: (Frame, Matrix?) => void, transform: Matrix) {
+    public visit(visitor: (Frame, Matrix?) => void, transform: Matrix) {
       var stack: Frame [];
       var frame: Frame;
       var frameContainer: FrameContainer;
@@ -212,34 +208,120 @@ module Shumway.Layers {
         this.children[b] = t;
       }
     }
-
-//    public render(context: CanvasRenderingContext2D, options?: any) {
-//      context.save();
-//      for (var i = 0; i < this.children.length; i++) {
-//        this.children[i].render(context, options);
-//      }
-//      context.restore();
-//    }
   }
+
+
+
 
   export class Canvas2DStageRenderer {
     context: CanvasRenderingContext2D;
-    constructor(context: CanvasRenderingContext2D) {
+    debugContexts: CanvasRenderingContext2D [];
+    count = 0;
+    constructor(context: CanvasRenderingContext2D, debugContexts: CanvasRenderingContext2D []) {
       this.context = context;
+      this.debugContexts = debugContexts;
     }
 
     public render(stage: Stage, options: any) {
       var context = this.context;
+      var debugContext = this.debugContexts[0];
+      var cacheContext = this.debugContexts[1];
       context.globalAlpha = 1;
       context.fillStyle = "black";
       context.fillRect(0, 0, stage.w, stage.h);
+
+
+      var points = Point.createEmptyPoints(4);
+      var corners = Point.createEmptyPoints(4);
+
+      var size = 64;
+      var that = this;
       stage.visit(function (frame: Frame, transform?: Matrix) {
+        context.save();
         context.setTransform(transform.a, transform.b, transform.c, transform.d, transform.tx, transform.ty);
-        context.globalAlpha = frame.alpha;
+        context.globalAlpha = 1 - frame.alpha;
         if (frame instanceof Shape) {
           var shape = <Shape>frame;
-          shape.source.render(context);
+          var shapeProperties = shape.source.properties;
+          // shape.source.render(context);
+          debugContext.save();
+          var m = Matrix.createIdentity();
+          transform.inverse(m);
+          if (false) {
+            debugContext.setTransform(m.a, m.b, m.c, m.d, m.tx, m.ty);
+            debugContext.fillStyle = "red";
+            debugContext.fillRect(0, 0, stage.w, stage.h);
+          } else {
+            var viewport = new Rectangle(0, 0, stage.w, stage.h);
+            var rectangle = new Rectangle(0, 0, shape.w, shape.h);
+            transform.transformRectangleAABB(rectangle);
+            viewport.intersect(rectangle);
+            m.transformRectangle(viewport, points);
+            var queryOBB = new OBB(points);
+            var queryBounds = queryOBB.getBounds();
+            var bounds = shape.source.getBounds();
+            bounds.x = bounds.y = 0;
+
+            var tileCache: TileCache = shapeProperties["tileCache"];
+            if (!tileCache) {
+              tileCache = shapeProperties["tileCache"] = new TileCache(bounds.w, bounds.h, size);
+            }
+            var tiles = tileCache.getTiles(new Rectangle(0, 0, stage.w, stage.h), m);
+
+            debugContext.save();
+            var tilesBounds = Rectangle.createEmpty();
+            if (that.count > 256) {
+              tileCache.tiles.forEach(function (tile) {
+                tile.use = 0;
+              });
+              that.count = 0;
+            }
+            var needsTiles = false;
+            tiles.forEach(function (tile) {
+              if (tile.use === 0) {
+                tilesBounds.union(tile.bounds);
+                needsTiles = true;
+              }
+            });
+            debugContext.translate(-tilesBounds.x, -tilesBounds.y);
+            if (needsTiles) {
+              debugContext.fillStyle = "black";
+              debugContext.fillRect(0, 0, stage.w, stage.h);
+              shape.source.render(debugContext);
+            }
+
+            tiles.forEach(function (tile) {
+              if (tile.use === 0) {
+                var w = stage.w / size | 0;
+                var h = stage.h / size | 0;
+                var sx = tile.bounds.x - tilesBounds.x;
+                var sy = tile.bounds.y - tilesBounds.y;
+                cacheContext.drawImage(debugContext.canvas, sx, sy, size, size, (that.count % w | 0) * size, (that.count / w | 0) * size, size, size);
+                that.count ++;
+
+                debugContext.fillStyle = "rgba(255, 0, 0, 0.5)";
+                debugContext.fillRect(tile.x * size, tile.y * size, size, size);
+              }
+              tile.use ++;
+            });
+
+            /*
+            debugContext.strokeStyle = "red";
+            debugContext.beginPath();
+            debugContext.moveTo(points[0].x, points[0].y);
+            debugContext.lineTo(points[1].x, points[1].y);
+            debugContext.lineTo(points[2].x, points[2].y);
+            debugContext.lineTo(points[3].x, points[3].y);
+            debugContext.closePath();
+            debugContext.stroke();
+            */
+
+            debugContext.restore();
+          }
+          debugContext.restore();
         }
+        context.globalAlpha = 1;
+        context.restore();
       }, stage.transform);
 
       if (options && options.drawLayers) {
@@ -344,13 +426,6 @@ module Shumway.Layers {
       this.w = bounds.w;
       this.h = bounds.h;
     }
-//    render(context: CanvasRenderingContext2D) {
-//      var m = this.transform;
-//      context.save();
-//      context.setTransform(m.a, m.b, m.c, m.d, m.tx, m.ty);
-//      this.source.render(context);
-//      context.restore();
-//    }
   }
 
   export class Video extends Frame {

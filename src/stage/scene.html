@@ -80,6 +80,8 @@
     <!--<canvas id="stageCanvas" width="512" height="256" style="background-color: #1F1F21;"></canvas>-->
     <canvas id="webGLCanvas" style="background-color: black;"></canvas>
     <canvas id="canvas2DCanvas" style="background-color: black;"></canvas>
+    <canvas id="canvas2DDebugCanvas" style="background-color: black;"></canvas>
+    <canvas id="canvas2DDebugCanvas2" style="background-color: black;"></canvas>
     <!--<canvas id="stageCanvas" style="background-color: #1F1F21;"></canvas>-->
   </div>
 
@@ -93,20 +95,22 @@
       tween.easing(easing);
       function next() {
         var w = 128, h = 128;
-        var x = Math.max(0, Math.random() * (webGLCanvas.width - w));
-        var y = Math.max(0, Math.random() * (webGLCanvas.height - h));
-        var s = 1;
+        var x = Math.max(0, Math.random() * 1000);
+        var y = Math.max(0, Math.random() * 1000);
+
         // var s = 0.5;
-        var s = 0.25 + Math.random() * 2;
+        // var s = 0.75 + Math.random() * 4;
+        var s = 1;
+//        var s = Math.random();
         // var s = (Math.random() - 0.5) * 4;
         tween.easing(easing);
         tween.delay(Math.random() * (500000 / sceneOptions.movement));
         tween.to({
-          // x: x,
-          // y: y,
-          // scaleX: s,
-          // scaleY: s,
-          rotation: (Math.random() - 0.5) * 180 * 10,
+          x: x,
+          y: y,
+          scaleX: s,
+          scaleY: s,
+          rotation: (Math.random() - 0.5) * 180 * 1,
           alpha: Math.random()
         }, 100000 / sceneOptions.speed).start();
 //        if (Math.random() < 0.1) {
@@ -143,18 +147,20 @@
 
     var webGLCanvas = document.getElementById("webGLCanvas");
     var canvas2DCanvas = document.getElementById("canvas2DCanvas");
+    var canvas2DDebugCanvas = document.getElementById("canvas2DDebugCanvas");
+    var canvas2DDebugCanvas2 = document.getElementById("canvas2DDebugCanvas2");
 
     var pixelRatio = 'devicePixelRatio' in window ? window.devicePixelRatio : 1;
     // var pixelRatio = 1;
 
-    var width = (window.innerWidth * 0.8) | 0;
-    var height = (window.innerHeight * 0.8) | 0;
+    var width = (window.innerWidth * 0.8) / 2 | 0;
+    var height = (window.innerHeight * 0.8) / 2 | 0;
 
     var gui = new dat.GUI();
 
     // var width = gui.domElement.offsetLeft - 10;
 
-    [webGLCanvas, canvas2DCanvas].forEach(function (canvas) {
+    [webGLCanvas, canvas2DCanvas, canvas2DDebugCanvas, canvas2DDebugCanvas2].forEach(function (canvas) {
       canvas.style.width = width + 'px';
       canvas.style.height = height + 'px';
       canvas.width = width * pixelRatio;
@@ -246,7 +252,8 @@
     webGLContext = new WebGLContext(webGLCanvas);
     webGLStageRenderer = new WebGLStageRenderer(webGLContext);
     canvas2DContext = canvas2DCanvas.getContext("2d");
-    canvas2DStageRenderer = new Canvas2DStageRenderer(canvas2DContext);
+    var canvas2DDebugContexts = [canvas2DDebugCanvas.getContext("2d"), canvas2DDebugCanvas2.getContext("2d")];
+    canvas2DStageRenderer = new Canvas2DStageRenderer(canvas2DContext, canvas2DDebugContexts);
 
     var stage, animators;
 
@@ -366,7 +373,7 @@
     }
 
     function updateOptions() {
-      context.imageSmoothingEnabled = context.mozImageSmoothingEnabled = sceneOptions.imageSmoothing;
+      canvas2DContext.imageSmoothingEnabled = canvas2DContext.mozImageSmoothingEnabled = sceneOptions.imageSmoothing;
     }
 
     updateScene();

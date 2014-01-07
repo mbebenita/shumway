@@ -585,14 +585,6 @@ module Shumway.GL {
       this._scratchCanvasContext = this._scratchCanvas.getContext("2d");
     }
 
-//    private cacheImage(object, image): WebGLTextureRegion {
-//      var src: WebGLTextureRegion = object["CachedWebGLTextureRegion"];
-//      if (!src) {
-//        src = object["CachedWebGLTextureRegion"] = this.context.cacheImage(image, false);
-//      }
-//      return src;
-//    }
-
     public render(stage: Stage, options: any) {
       var that = this;
       var context = this.context;
@@ -669,122 +661,6 @@ module Shumway.GL {
         }
       }
     }
-
-//    public render2(stage: Stage, draw: boolean) {
-//      var that = this;
-//      var context = this.context;
-//      context.clear(Color.None);
-//
-//      this._solidFillGeometry.clear();
-//      stage.visit(function (frame: Frame, transform?: Matrix) {
-//        that.context.setTransform(transform);
-//        if (frame instanceof Bitmap) {
-//          var image = (<Bitmap>frame).image;
-//          var src = context.cacheImage(image, image.width, image.height, false, false);
-//          that.addTextureFillGeometry (
-//            that._textureFillGeometry,
-//            src,
-//            new Rectangle(0, 0, src.region.w, src.region.h),
-//            transform
-//          );
-//        } else if (frame instanceof Flake) {
-//          that.addSolidFillGeometry (
-//            that._solidFillGeometry,
-//            new Rectangle(0, 0, frame.w, frame.h),
-//            Color.parseColor((<Flake>frame).fillStyle),
-//            transform
-//          );
-//        } else if (frame instanceof Video) {
-//          // that.renderVideo(<Video>frame, transform);
-//        }
-//      }, stage.transform);
-//
-//      this.drawSolidFillGeometry(this._solidFillGeometry);
-//      // this.drawTextureFillGeometry(this._textureFillGeometry);
-//    }
-
-//    addTextureFillGeometry(geometry: WebGLGeometry, src: WebGLTextureRegion, dstRectangle: Rectangle, transform: Matrix) {
-//      var srcRectangle = src.region.clone();
-//      srcRectangle.scale(1 / src.texture.w, 1 / src.texture.h);
-//      transform.transformRectangle(dstRectangle, this._tmpVertices);
-//      this._tmpVertices[0].coordinate.x = srcRectangle.x;
-//      this._tmpVertices[0].coordinate.y = srcRectangle.y;
-//      this._tmpVertices[1].coordinate.x = srcRectangle.x + srcRectangle.w;
-//      this._tmpVertices[1].coordinate.y = srcRectangle.y;
-//      this._tmpVertices[2].coordinate.x = srcRectangle.x + srcRectangle.w;
-//      this._tmpVertices[2].coordinate.y = srcRectangle.y + srcRectangle.h;
-//      this._tmpVertices[3].coordinate.x = srcRectangle.x;
-//      this._tmpVertices[3].coordinate.y = srcRectangle.y + srcRectangle.h;
-//      geometry.addVertices(this._tmpVertices, 4);
-//      geometry.addQuad();
-//    }
-//
-//    addSolidFillGeometry(geometry: WebGLGeometry, rectangle: Rectangle, color: Color, transform: Matrix) {
-//      transform.transformRectangle(rectangle, this._tmpVertices);
-//      for (var i = 0; i < 4; i++) {
-//        this._tmpVertices[i].color.set(color);
-//      }
-//      geometry.addVertices(this._tmpVertices, 4);
-//      geometry.addQuad();
-//    }
-
-//    drawSolidFillGeometry(geometry: WebGLGeometry) {
-//      var gl = this.context.gl;
-//      var g = geometry;
-//      var p = this._solidFillProgram;
-//      g.uploadBuffers();
-//      gl.useProgram(p);
-//      gl.uniform1f(p.uniforms.uZ.location, 1);
-//      gl.uniformMatrix3fv(p.uniforms.uTransformMatrix.location, false, Matrix.createIdentity().toWebGLMatrix());
-//      gl.bindBuffer(gl.ARRAY_BUFFER, g.attributes["position"].buffer);
-//      var position = p.attributes.aPosition.location;
-//      gl.enableVertexAttribArray(position);
-//      gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0);
-//      gl.bindBuffer(gl.ARRAY_BUFFER, g.attributes["color"].buffer);
-//      var color = p.attributes.aColor.location;
-//      gl.enableVertexAttribArray(color);
-//      gl.vertexAttribPointer(color, 4, gl.FLOAT, false, 0, 0);
-//      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, g.attributes["element"].buffer);
-//      gl.drawElements(gl.TRIANGLES, g.triangleCount * 3, gl.UNSIGNED_SHORT, 0);
-//    }
-//
-//    drawSolidFillGeometry(geometry: WebGLGeometry) {
-//      var gl = this.context.gl;
-//      var g = geometry;
-//      var p = this._textureFillProgram;
-//      g.uploadBuffers();
-//      gl.useProgram(p);
-//      gl.uniform1f(p.uniforms.uZ.location, 1);
-//      gl.uniformMatrix3fv(p.uniforms.uTransformMatrix.location, false, Matrix.createIdentity().toWebGLMatrix());
-//      gl.bindBuffer(gl.ARRAY_BUFFER, g.attributes["position"].buffer);
-//      var position = p.attributes.aPosition.location;
-//      gl.enableVertexAttribArray(position);
-//      gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0);
-//
-//      gl.bindBuffer(gl.ARRAY_BUFFER, g.attributes["coordinate"].buffer);
-//      var color = p.attributes.aCoordinate.location;
-//      gl.enableVertexAttribArray(color);
-//      gl.vertexAttribPointer(color, 4, gl.FLOAT, false, 0, 0);
-//
-//      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, g.attributes["element"].buffer);
-//      gl.drawElements(gl.TRIANGLES, g.triangleCount * 3, gl.UNSIGNED_SHORT, 0);
-//    }
-
-//    renderBitmap(source: Bitmap, transform: Matrix) {
-//      if (!source.image.complete) {
-//        return;
-//      }
-//
-//      var src: WebGLTextureRegion = this.context.cacheImage(source.image, source.image.width, source.image.height, false, false);
-//      this.context.drawImage(src);
-//    }
-//
-//    renderVideo(source: Video, transform: Matrix) {
-//      if (!(source.video.videoWidth && source.video.videoHeight)) {
-//        return;
-//      }
-//      // this.context.drawImage(source.video, source.video.videoWidth, source.video.videoHeight, true);
-//    }
   }
 
   export class WebGLBrush {

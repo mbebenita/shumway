@@ -71,12 +71,13 @@ module Shumway {
     new VectorShape(loadShape("decorate.json")),
     new VectorShape(loadShape("background.json")),
     new VectorShape(loadShape("fire.json")),
-    new VectorShape(loadShape("large.json"))
+//    new VectorShape(loadShape("large.json")),
+//    new VectorShape(loadShape("wide.json"))
   ];
 
-  loadShape("assets.json").forEach(function (shape) {
-    Shapes.push(new VectorShape(shape));
-  });
+//  loadShape("assets.json").forEach(function (shape) {
+//    Shapes.push(new VectorShape(shape));
+//  });
 
   export function getRandomShape() {
     return Shapes[Math.random() * Shapes.length | 0];
