@@ -3,7 +3,7 @@
 
 module Shumway.GL {
   var traceLevel = 1;
-  var MAX_SIZE = 1024 * 4;
+  var MAX_SIZE = 1024 * 1;
   enum TraceLevel {
     None,
     Brief,
@@ -26,6 +26,9 @@ module Shumway.GL {
   import Video = Shumway.Layers.Video;
   import Filter = Shumway.Layers.Filter;
   import BlurFilter = Shumway.Layers.BlurFilter;
+  import RenderableTileCache = Shumway.Layers.RenderableTileCache;
+  import Tile = Shumway.Geometry.Tile;
+  import ITextureRegion = Shumway.Layers.ITextureRegion;
 
   function count(name) {
     Counter.count(name);
@@ -78,6 +81,9 @@ module Shumway.GL {
     public static White = new Color(1, 1, 1, 1);
     public static Black = new Color(0, 0, 0, 1);
     private static colorCache: { [color: string]: Color } = {};
+    public static randomColor(alpha: number = 1): Color {
+      return new Color(Math.random(), Math.random(), Math.random(), alpha);
+    }
     public static parseColor(color: string) {
       if (!Color.colorCache) {
         Color.colorCache = Object.create(null);
@@ -191,7 +197,6 @@ module Shumway.GL {
     private _fillColor: Color = Color.Red;
 
     private _textures: WebGLTexture [];
-
 
     scratch: WebGLTexture [];
 
@@ -490,7 +495,7 @@ module Shumway.GL {
 //      gl.drawElements(gl.TRIANGLES, triangles * 3, gl.UNSIGNED_SHORT, 0);
 //    }
 
-//    public drawImage(src: WebGLTextureRegion, dstRectangle?: Rectangle) {
+//    public IImage(src: WebGLTextureRegion, dstRectangle?: Rectangle) {
 //      if (!dstRectangle) {
 //        dstRectangle = new Rectangle(0, 0, src.region.w, src.region.h);
 //      } else {
@@ -605,7 +610,14 @@ module Shumway.GL {
         stencilBrush.fillRectangle(rectangle, Color.Black, identity);
       }
 
+      var viewport = new Rectangle(0, 0, stage.w, stage.h);
       var image;
+      var inverseTransform = Matrix.createIdentity();
+
+      function cacheImage(src: CanvasRenderingContext2D, srcBounds: Rectangle): ITextureRegion {
+        return context.cacheImage(src.getImageData(srcBounds.x, srcBounds.y, srcBounds.w, srcBounds.h), false);
+      }
+
       stage.visit(function (frame: Frame, transform?: Matrix) {
         that.context.setTransform(transform);
         if (frame instanceof Flake) {
@@ -618,17 +630,52 @@ module Shumway.GL {
           var shape = <Shape>frame;
           var bounds = shape.source.getBounds();
           if (!bounds.isEmpty()) {
+            var source = shape.source;
+            var tileSize = 128;
+            var tileCache: RenderableTileCache = source.properties["tileCache"];
+            if (!tileCache) {
+              tileCache = source.properties["tileCache"] = new RenderableTileCache(source, tileSize);
+            }
+            transform.inverse(inverseTransform);
+            var tiles = tileCache.fetchTiles(viewport, inverseTransform, that._scratchCanvasContext, cacheImage);
+
+            /*
             var src: WebGLTextureRegion = shape.source.properties["CachedWebGLTextureRegion"];
             if (!src || !src.texture) {
               that._scratchCanvasContext.clearRect(0, 0, that._scratchCanvas.width, that._scratchCanvas.height);
               shape.source.render(that._scratchCanvasContext);
               var image: ImageData = that._scratchCanvasContext.getImageData(0, 0, bounds.w, bounds.h);
-              src = shape.source.properties["CachedWebGLTextureRegion"] = context.cacheImage(image, false);
+              try {
+                src = shape.source.properties["CachedWebGLTextureRegion"] = context.cacheImage(image, false);
+              } catch (x) {
+                return;
+              }
             }
-            if (!brush.drawImage(src, undefined, new Color(1, 1, 1, frame.alpha), transform)) {
+            if (!brush.
+            (src, undefined, new Color(1, 1, 1, frame.alpha), transform)) {
               brush.draw();
               brush.reset();
               brush.drawImage(src, undefined, new Color(1, 1, 1, frame.alpha), transform);
+            }
+            */
+            for (var i = 0; i < tiles.length; i++) {
+              var tile = tiles[i];
+              var tileTransform = Matrix.createIdentity();
+              tileTransform.translate(tile.bounds.x, tile.bounds.y);
+              tileTransform.concat(transform);
+              var src = <WebGLTextureRegion>(tile.cachedTextureRegion);
+              if (!brush.drawImage(src, undefined, new Color(1, 1, 1, frame.alpha), tileTransform)) {
+                brush.draw();
+                brush.reset();
+                brush.drawImage(src, undefined, new Color(1, 1, 1, frame.alpha), tileTransform);
+              }
+              if (true) {
+                var srcBounds = src.region.clone();
+                if (!tile.color) {
+                  tile.color = Color.randomColor(0.1);
+                }
+                brush.fillRectangle(new Rectangle(0, 0, srcBounds.w, srcBounds.h), tile.color, tileTransform);
+              }
             }
           }
         }
@@ -744,6 +791,7 @@ module Shumway.GL {
       }
       var tmpVertices = WebGLCombinedBrush.tmpVertices;
       var srcRectangle = src.region.clone();
+      srcRectangle.offset(0.5, 0.5).resize(-1, -1);
       srcRectangle.scale(1 / src.texture.w, 1 / src.texture.h);
       transform.transformRectangle(dstRectangle, tmpVertices);
       tmpVertices[0].coordinate.x = srcRectangle.x;

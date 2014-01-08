@@ -210,8 +210,116 @@ module Shumway.Layers {
     }
   }
 
+  export interface ITextureRegion {
+    texture: any;
+    region: Rectangle;
+  }
 
+//  export class Canvas2DTextureRegion implements ITextureRegion {
+//    texture: any;
+//    region: Rectangle;
+//    constructor(texture: any, region: Rectangle) {
+//      this.texture = texture;
+//      this.region = region;
+//    }
+//  }
+//
+//  export class Canvas2DTexture {
+//    bounds: Rectangle;
+//    context: CanvasRenderingContext2D;
+//    size: number = 0;
+//    regions: Canvas2DTextureRegion [] = [];
+//    constructor(context: CanvasRenderingContext2D, size: number) {
+//      this.context = context;
+//      this.bounds = new Rectangle(0, 0, context.canvas.width, context.canvas.height);
+//      this.size = size;
+//    }
+//    cacheImage(src: CanvasRenderingContext2D, srcBounds: Rectangle): Canvas2DTextureRegion {
+//      if (this.regions.length > 100) {
+//        for (var i = 0; i < this.regions.length / 2; i++) {
+//          this.regions[i].texture = null;
+//        }
+//        this.regions = [];
+//      }
+//      var x = (this.regions.length % 16 | 0) * this.size;
+//      var y = (this.regions.length / 16 | 0) * this.size;
+//      var w = 0, h = 0;
+//      var region = new Canvas2DTextureRegion(this, new Rectangle(x, y, w, h));
+//      this.context.drawImage(src.canvas, srcBounds.x, srcBounds.y, srcBounds.w, srcBounds.h, x, y, srcBounds.w, srcBounds.h);
+//      this.regions.push(region);
+//      return region;
+//    }
+//  }
 
+  export class RenderableTileCache {
+    cache: TileCache;
+    source: IRenderable;
+    constructor(source: IRenderable, size) {
+      this.source = source;
+      var bounds = source.getBounds();
+      this.cache = new TileCache(bounds.w, bounds.h, size);
+    }
+    fetchTiles(query: Rectangle,
+               transform: Matrix,
+               context: CanvasRenderingContext2D,
+               cacheImage: (src: CanvasRenderingContext2D, srcBounds: Rectangle) => ITextureRegion): Tile [] {
+      var tiles = this.cache.getTiles(query, transform);
+      var uncachedTilesBounds = null;
+      var uncachedTiles: Tile [] = [];
+      for (var i = 0; i < tiles.length; i++) {
+        var tile = tiles[i];
+        if (!tile.cachedTextureRegion || !tile.cachedTextureRegion.texture) {
+          if (!uncachedTilesBounds) {
+            uncachedTilesBounds = Rectangle.createEmpty();
+          }
+          uncachedTilesBounds.union(tile.bounds);
+          uncachedTiles.push(tile);
+        }
+      }
+      if (uncachedTilesBounds) {
+        this.cacheTiles(context, uncachedTilesBounds, uncachedTiles, cacheImage);
+
+        var points = Point.createEmptyPoints(4);
+        transform.transformRectangle(query, points);
+        context.strokeStyle = "white";
+        context.beginPath();
+        context.moveTo(points[0].x, points[0].y);
+        context.lineTo(points[1].x, points[1].y);
+        context.lineTo(points[2].x, points[2].y);
+        context.lineTo(points[3].x, points[3].y);
+        context.closePath();
+        context.stroke();
+      }
+
+      return tiles;
+    }
+    private cacheTiles(context: CanvasRenderingContext2D,
+                       bounds: Rectangle,
+                       uncachedTiles: Tile [],
+                       cacheImage: (src: CanvasRenderingContext2D, srcBounds: Rectangle) => ITextureRegion) {
+      context.setTransform(1, 0, 0, 1, 0, 0);
+      // context.fillStyle = "black";
+      // context.fillRect(0, 0, context.canvas.width, context.canvas.height);
+      context.clearRect(0, 0, context.canvas.width, context.canvas.height);
+      context.translate(-bounds.x, -bounds.y);
+      this.source.render(context);
+
+      for (var i = 0; i < uncachedTiles.length; i++) {
+        var tile = uncachedTiles[i];
+        var region = tile.bounds.clone();
+        region.x -= bounds.x;
+        region.y -= bounds.y;
+        tile.cachedTextureRegion = cacheImage(context, region);
+//        context.fillStyle = "rgba(255, 0, 0, 0.5)";
+//        context.fillRect(tile.bounds.x, tile.bounds.y, tile.bounds.w, tile.bounds.h);
+//        context.strokeStyle = "rgba(255, 255, 255, 0.5)";
+//        context.strokeRect(tile.bounds.x, tile.bounds.y, tile.bounds.w, tile.bounds.h);
+//        context.fillStyle = "black";
+//        context.font = "12px Consolas";
+//        context.fillText(String(tile.index), tile.bounds.x + 2, tile.bounds.y + 10);
+      }
+    }
+  }
 
   export class Canvas2DStageRenderer {
     context: CanvasRenderingContext2D;
@@ -243,7 +351,7 @@ module Shumway.Layers {
         if (frame instanceof Shape) {
           var shape = <Shape>frame;
           var shapeProperties = shape.source.properties;
-          // shape.source.render(context);
+          shape.source.render(context);
           debugContext.save();
           var m = Matrix.createIdentity();
           transform.inverse(m);
@@ -252,71 +360,18 @@ module Shumway.Layers {
             debugContext.fillStyle = "red";
             debugContext.fillRect(0, 0, stage.w, stage.h);
           } else {
+
             var viewport = new Rectangle(0, 0, stage.w, stage.h);
             var rectangle = new Rectangle(0, 0, shape.w, shape.h);
+
             transform.transformRectangleAABB(rectangle);
             viewport.intersect(rectangle);
-            m.transformRectangle(viewport, points);
-            var queryOBB = new OBB(points);
-            var queryBounds = queryOBB.getBounds();
-            var bounds = shape.source.getBounds();
-            bounds.x = bounds.y = 0;
 
-            var tileCache: TileCache = shapeProperties["tileCache"];
+            var tileCache: RenderableTileCache = shapeProperties["tileCache"];
             if (!tileCache) {
-              tileCache = shapeProperties["tileCache"] = new TileCache(bounds.w, bounds.h, size);
+              tileCache = shapeProperties["tileCache"] = new RenderableTileCache(shape.source, size);
             }
-            var tiles = tileCache.getTiles(new Rectangle(0, 0, stage.w, stage.h), m);
-
-            debugContext.save();
-            var tilesBounds = Rectangle.createEmpty();
-            if (that.count > 256) {
-              tileCache.tiles.forEach(function (tile) {
-                tile.use = 0;
-              });
-              that.count = 0;
-            }
-            var needsTiles = false;
-            tiles.forEach(function (tile) {
-              if (tile.use === 0) {
-                tilesBounds.union(tile.bounds);
-                needsTiles = true;
-              }
-            });
-            debugContext.translate(-tilesBounds.x, -tilesBounds.y);
-            if (needsTiles) {
-              debugContext.fillStyle = "black";
-              debugContext.fillRect(0, 0, stage.w, stage.h);
-              shape.source.render(debugContext);
-            }
-
-            tiles.forEach(function (tile) {
-              if (tile.use === 0) {
-                var w = stage.w / size | 0;
-                var h = stage.h / size | 0;
-                var sx = tile.bounds.x - tilesBounds.x;
-                var sy = tile.bounds.y - tilesBounds.y;
-                cacheContext.drawImage(debugContext.canvas, sx, sy, size, size, (that.count % w | 0) * size, (that.count / w | 0) * size, size, size);
-                that.count ++;
-
-                debugContext.fillStyle = "rgba(255, 0, 0, 0.5)";
-                debugContext.fillRect(tile.x * size, tile.y * size, size, size);
-              }
-              tile.use ++;
-            });
-
-            /*
-            debugContext.strokeStyle = "red";
-            debugContext.beginPath();
-            debugContext.moveTo(points[0].x, points[0].y);
-            debugContext.lineTo(points[1].x, points[1].y);
-            debugContext.lineTo(points[2].x, points[2].y);
-            debugContext.lineTo(points[3].x, points[3].y);
-            debugContext.closePath();
-            debugContext.stroke();
-            */
-
-            debugContext.restore();
+            // var tiles = tileCache.fetchTiles(viewport, m, debugContext, that.texture);
           }
           debugContext.restore();
         }

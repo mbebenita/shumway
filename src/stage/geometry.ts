@@ -194,20 +194,34 @@ module Shumway.Geometry {
      * Snaps the rectangle to pixel boundaries. The computed rectangle covers
      * the original rectangle.
      */
-    snap () {
+    snap (): Rectangle  {
       var x1 = Math.ceil(this.x + this.w);
       var y1 = Math.ceil(this.y + this.h);
       this.x |= 0;
       this.y |= 0;
       this.w = x1 - this.x;
       this.h = y1 - this.y;
+      return this;
     }
 
-    scale (x: number, y: number) {
+    scale (x: number, y: number): Rectangle  {
       this.x *= x;
       this.y *= y;
       this.w *= x;
       this.h *= y;
+      return this;
+    }
+
+    offset (x: number, y: number): Rectangle  {
+      this.x += x;
+      this.y += y;
+      return this;
+    }
+
+    resize (w: number, h: number): Rectangle  {
+      this.w += w;
+      this.h += h;
+      return this;
     }
 
     getCenter(): Point {
@@ -758,7 +772,11 @@ module Shumway.Geometry {
     }
 
     public insert(w: number, h: number): Rectangle {
-      return this._root.insert(w + this._padding, h + this._padding);
+      var result = this._root.insert(w + this._padding, h + this._padding);
+      if (result) {
+        result.resize(-this._padding, -this._padding);
+      }
+      return result;
     }
   }
 
@@ -1029,8 +1047,9 @@ module Shumway.Geometry {
     y: number;
     index: number;
     bounds: Rectangle;
-    _obb: OBB;
-    use: number = 0;
+    cachedTextureRegion: Shumway.Layers.ITextureRegion;
+    color: Shumway.GL.Color;
+    private _obb: OBB;
     private static corners = Point.createEmptyPoints(4);
     getOBB(): OBB {
       if (this._obb) {
@@ -1084,7 +1103,7 @@ module Shumway.Geometry {
       for (var x = minX; x < maxX; x++) {
         for (var y = minY; y < maxY; y++) {
           var tile = this.tiles[y * this.columns + x];
-          if (tile.getOBB().intersects(queryOBB)) {
+          if (tile.bounds.intersects(queryBounds) && tile.getOBB().intersects(queryOBB)) {
             tiles.push(tile);
           }
         }

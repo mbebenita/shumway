@@ -97,37 +97,29 @@
         var w = 128, h = 128;
         var x = Math.max(0, Math.random() * 1000);
         var y = Math.max(0, Math.random() * 1000);
+//        var x = 100, y = 100;
 
         // var s = 0.5;
-        // var s = 0.75 + Math.random() * 4;
-        var s = 1;
-//        var s = Math.random();
-        // var s = (Math.random() - 0.5) * 4;
+        var s = 0.25 + Math.random() * 4;
+//        var s = 1;
+//        var s = (Math.random() - 0.5) * 2;
         tween.easing(easing);
         tween.delay(Math.random() * (500000 / sceneOptions.movement));
+        // tween.delay(1000);
         tween.to({
           x: x,
           y: y,
           scaleX: s,
           scaleY: s,
           rotation: (Math.random() - 0.5) * 180 * 1,
-          alpha: Math.random()
+          // alpha: Math.random()
+          alpha: 1
         }, 100000 / sceneOptions.speed).start();
-//        if (Math.random() < 0.1) {
-//          tween.stop();
-//        }
       }
       next();
       tween.onComplete(next);
       tween.start();
     }
-
-    // var seed = 20;
-    // Math.random = function () {
-    //    var x = Math.sin(seed++) * 10000;
-    //    return x - Math.floor(x);
-    // };
-
 
     var timeline;
 
@@ -154,7 +146,7 @@
     // var pixelRatio = 1;
 
     var width = (window.innerWidth * 0.8) / 2 | 0;
-    var height = (window.innerHeight * 0.8) / 2 | 0;
+    var height = (window.innerHeight * 0.8) / 1 | 0;
 
     var gui = new dat.GUI();
 
@@ -307,7 +299,7 @@
         var frame = new Shape(renderTextShape(randomText()), 256, 200, sceneOptions.cacheAsBitmap);
         frame.x = (Math.random()) * canvas.width;
         frame.y = (Math.random()) * canvas.height;
-        frame.alpha = Math.random();
+        // frame.alpha = Math.random();
         stage.addChild(frame);
         shuffle(frame, TWEEN.Easing.Exponential.Out);
       }
@@ -321,7 +313,7 @@
         // var frame = new Shape(renderGuy, 100, 110, sceneOptions.cacheAsBitmap);
         frame.x = (Math.random()) * canvas.width;
         frame.y = (Math.random()) * canvas.height;
-        frame.alpha = Math.random();
+        // frame.alpha = Math.random();
         stage.addChild(frame);
         shuffle(frame, TWEEN.Easing.Exponential.Out);
       }
@@ -332,7 +324,7 @@
         frame.origin = new Point(frame.w / 2, frame.h / 2);
         frame.x = (Math.random()) * canvas.width;
         frame.y = (Math.random()) * canvas.height;
-        frame.alpha = Math.random();
+        // frame.alpha = Math.random();
         stage.addChild(frame);
         shuffle(frame, TWEEN.Easing.Exponential.Out);
       }
@@ -344,7 +336,7 @@
           var frame = new Shape(Shumway.getImageShape(image));
           frame.x = (Math.random()) * canvas.width;
           frame.y = (Math.random()) * canvas.height;
-          frame.alpha = Math.random();
+          // frame.alpha = Math.random();
           if (false || Math.random() < 0.5) {
             frame.filters = [new BlurFilter(10, 10)];
           }
@@ -364,7 +356,7 @@
         var frame = new Video(videoElement);
         frame.x = Math.random() * 1000;
         frame.y = Math.random() * 100;
-        frame.alpha = Math.random();
+        // frame.alpha = Math.random();
         stage.addChild(frame);
         shuffle(frame, TWEEN.Easing.Exponential.Out);
       }
