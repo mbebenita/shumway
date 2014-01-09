@@ -3,7 +3,8 @@
 
 module Shumway.GL {
   var traceLevel = 1;
-  var MAX_SIZE = 1024 * 1;
+  var CANVAS_MAX_SIZE = 1024;
+  var TEXTURE_MAX_SIZE = 1024;
   enum TraceLevel {
     None,
     Brief,
@@ -26,9 +27,10 @@ module Shumway.GL {
   import Video = Shumway.Layers.Video;
   import Filter = Shumway.Layers.Filter;
   import BlurFilter = Shumway.Layers.BlurFilter;
-  import RenderableTileCache = Shumway.Layers.RenderableTileCache;
+
+  import TileCache = Shumway.Geometry.TileCache;
   import Tile = Shumway.Geometry.Tile;
-  import ITextureRegion = Shumway.Layers.ITextureRegion;
+  import OBB = Shumway.Geometry.OBB;
 
   function count(name) {
     Counter.count(name);
@@ -177,7 +179,7 @@ module Shumway.GL {
     }
 
     reset() {
-      this._rectanglePacker = new RectanglePacker(this._w, this._h, this._solitary ? 0 : 2);
+      this._rectanglePacker = new RectanglePacker(this._w, this._h, this._solitary ? 0 : 0);
     }
   }
 
@@ -197,6 +199,10 @@ module Shumway.GL {
     private _fillColor: Color = Color.Red;
 
     private _textures: WebGLTexture [];
+
+    getTextures(): WebGLTexture [] {
+      return this._textures;
+    }
 
     scratch: WebGLTexture [];
 
@@ -271,8 +277,8 @@ module Shumway.GL {
         }
       }
       if (!region) {
-        var aw = solitary ? w : MAX_SIZE;
-        var ah = solitary ? h : MAX_SIZE;
+        var aw = solitary ? w : TEXTURE_MAX_SIZE;
+        var ah = solitary ? h : TEXTURE_MAX_SIZE;
         if (this._textures.length === WebGLContext.MAX_TEXTURES) {
           texture = this.recycleTexture();
         } else {
@@ -585,10 +591,12 @@ module Shumway.GL {
       this._stencilBrush = new WebGLCombinedBrush(context, this._stencilBrushGeometry);
 
       this._scratchCanvas = document.createElement("canvas");
-      this._scratchCanvas.width = MAX_SIZE;
-      this._scratchCanvas.height = MAX_SIZE;
+      this._scratchCanvas.width = CANVAS_MAX_SIZE;
+      this._scratchCanvas.height = CANVAS_MAX_SIZE;
       this._scratchCanvasContext = this._scratchCanvas.getContext("2d");
     }
+
+    private _cachedTiles = [];
 
     public render(stage: Stage, options: any) {
       var that = this;
@@ -614,7 +622,7 @@ module Shumway.GL {
       var image;
       var inverseTransform = Matrix.createIdentity();
 
-      function cacheImage(src: CanvasRenderingContext2D, srcBounds: Rectangle): ITextureRegion {
+      function cacheImage(src: CanvasRenderingContext2D, srcBounds: Rectangle): WebGLTextureRegion {
         return context.cacheImage(src.getImageData(srcBounds.x, srcBounds.y, srcBounds.w, srcBounds.h), false);
       }
 
@@ -632,47 +640,31 @@ module Shumway.GL {
           if (!bounds.isEmpty()) {
             var source = shape.source;
             var tileSize = 128;
+            if (bounds.w < 64 || bounds.h < 64) {
+              tileSize = 64;
+            }
             var tileCache: RenderableTileCache = source.properties["tileCache"];
             if (!tileCache) {
               tileCache = source.properties["tileCache"] = new RenderableTileCache(source, tileSize);
             }
             transform.inverse(inverseTransform);
             var tiles = tileCache.fetchTiles(viewport, inverseTransform, that._scratchCanvasContext, cacheImage);
-
-            /*
-            var src: WebGLTextureRegion = shape.source.properties["CachedWebGLTextureRegion"];
-            if (!src || !src.texture) {
-              that._scratchCanvasContext.clearRect(0, 0, that._scratchCanvas.width, that._scratchCanvas.height);
-              shape.source.render(that._scratchCanvasContext);
-              var image: ImageData = that._scratchCanvasContext.getImageData(0, 0, bounds.w, bounds.h);
-              try {
-                src = shape.source.properties["CachedWebGLTextureRegion"] = context.cacheImage(image, false);
-              } catch (x) {
-                return;
-              }
-            }
-            if (!brush.
-            (src, undefined, new Color(1, 1, 1, frame.alpha), transform)) {
-              brush.draw();
-              brush.reset();
-              brush.drawImage(src, undefined, new Color(1, 1, 1, frame.alpha), transform);
-            }
-            */
             for (var i = 0; i < tiles.length; i++) {
               var tile = tiles[i];
               var tileTransform = Matrix.createIdentity();
               tileTransform.translate(tile.bounds.x, tile.bounds.y);
               tileTransform.concat(transform);
               var src = <WebGLTextureRegion>(tile.cachedTextureRegion);
+
               if (!brush.drawImage(src, undefined, new Color(1, 1, 1, frame.alpha), tileTransform)) {
-                brush.draw();
+                brush.draw(options.drawElements);
                 brush.reset();
                 brush.drawImage(src, undefined, new Color(1, 1, 1, frame.alpha), tileTransform);
               }
-              if (true) {
+              if (options.drawTiles) {
                 var srcBounds = src.region.clone();
                 if (!tile.color) {
-                  tile.color = Color.randomColor(0.1);
+                  tile.color = Color.randomColor(0.2);
                 }
                 brush.fillRectangle(new Rectangle(0, 0, srcBounds.w, srcBounds.h), tile.color, tileTransform);
               }
@@ -702,10 +694,113 @@ module Shumway.GL {
           gl.clearColor(0, 0, 0, 0);
           gl.clear(gl.COLOR_BUFFER_BIT);
         }
-        brush.draw();
+        brush.draw(options.drawElements);
         if (options.useStencil) {
           gl.disable(gl.STENCIL_TEST);
         }
+      }
+
+      if (options.drawTextures) {
+        brush.reset();
+        var textures = context.getTextures();
+        var textureWindowSize = viewport.w / 5;
+        var transform = Matrix.createIdentity();
+        if (textureWindowSize > viewport.h / textures.length) {
+          textureWindowSize = viewport.h / textures.length;
+        }
+        brush.fillRectangle(new Rectangle(viewport.w - textureWindowSize, 0, textureWindowSize, 1024 * 16), new Color(0, 0, 0, 0.5), transform);
+        for (var i = 0; i < textures.length; i++) {
+          var texture = textures[i];
+          var textureWindow = new Rectangle(viewport.w - textureWindowSize, i * textureWindowSize, textureWindowSize, textureWindowSize);
+          brush.drawImage(new WebGLTextureRegion(texture, new Rectangle(0, 0, texture.w, texture.h)), textureWindow, Color.White, transform);
+        }
+        brush.draw();
+      }
+    }
+  }
+
+  export class RenderableTileCache {
+    cache: TileCache;
+    source: IRenderable;
+    constructor(source: IRenderable, size) {
+      this.source = source;
+      var bounds = source.getBounds();
+      this.cache = new TileCache(bounds.w, bounds.h, size);
+    }
+    fetchTiles(query: Rectangle,
+               transform: Matrix,
+               scratchContext: CanvasRenderingContext2D,
+               cacheImage: (src: CanvasRenderingContext2D, srcBounds: Rectangle) => WebGLTextureRegion): Tile [] {
+      var tiles = this.cache.getTiles(query, transform);
+      var uncachedTilesBounds = null;
+      var uncachedTiles: Tile [] = [];
+      for (var i = 0; i < tiles.length; i++) {
+        var tile = tiles[i];
+        if (!tile.cachedTextureRegion || !tile.cachedTextureRegion.texture) {
+          if (!uncachedTilesBounds) {
+            uncachedTilesBounds = Rectangle.createEmpty();
+          }
+          uncachedTilesBounds.union(tile.bounds);
+          uncachedTiles.push(tile);
+        }
+      }
+      if (uncachedTilesBounds) {
+        this.cacheTiles(scratchContext, uncachedTilesBounds, uncachedTiles, cacheImage);
+
+        var points = Point.createEmptyPoints(4);
+        transform.transformRectangle(query, points);
+        scratchContext.strokeStyle = "white";
+        scratchContext.beginPath();
+        scratchContext.moveTo(points[0].x, points[0].y);
+        scratchContext.lineTo(points[1].x, points[1].y);
+        scratchContext.lineTo(points[2].x, points[2].y);
+        scratchContext.lineTo(points[3].x, points[3].y);
+        scratchContext.closePath();
+        scratchContext.stroke();
+      }
+
+      return tiles;
+    }
+    private cacheTiles(scratchContext: CanvasRenderingContext2D,
+                       uncachedTileBounds: Rectangle,
+                       uncachedTiles: Tile [],
+                       cacheImage: (src: CanvasRenderingContext2D, srcBounds: Rectangle) => WebGLTextureRegion) {
+      var scratchBounds = new Rectangle(0, 0, scratchContext.canvas.width, scratchContext.canvas.height);
+      while (true) {
+        scratchContext.setTransform(1, 0, 0, 1, 0, 0);
+        scratchContext.clearRect(0, 0, scratchBounds.w, scratchBounds.h);
+        scratchContext.translate(-uncachedTileBounds.x, -uncachedTileBounds.y);
+        this.source.render(scratchContext);
+
+        var remainingUncachedTiles = null, remainingUncachedTilesBounds = null;
+        for (var i = 0; i < uncachedTiles.length; i++) {
+          var tile = uncachedTiles[i];
+          var region = tile.bounds.clone();
+          region.x -= uncachedTileBounds.x;
+          region.y -= uncachedTileBounds.y;
+          if (!scratchBounds.contains(region)) {
+            if (!remainingUncachedTiles) {
+              remainingUncachedTiles = [];
+              remainingUncachedTilesBounds = Rectangle.createEmpty();
+            }
+            remainingUncachedTiles.push(tile);
+            remainingUncachedTilesBounds.union(tile.bounds);
+          }
+          tile.cachedTextureRegion = cacheImage(scratchContext, region);
+  //        context.fillStyle = "rgba(255, 0, 0, 0.5)";
+  //        context.fillRect(tile.bounds.x, tile.bounds.y, tile.bounds.w, tile.bounds.h);
+  //        context.strokeStyle = "rgba(255, 255, 255, 0.5)";
+  //        context.strokeRect(tile.bounds.x, tile.bounds.y, tile.bounds.w, tile.bounds.h);
+  //        context.fillStyle = "black";
+  //        context.font = "12px Consolas";
+  //        context.fillText(String(tile.index), tile.bounds.x + 2, tile.bounds.y + 10);
+        }
+        if (remainingUncachedTiles) {
+          uncachedTiles = remainingUncachedTiles;
+          uncachedTileBounds = remainingUncachedTilesBounds;
+          continue;
+        }
+        break;
       }
     }
   }
@@ -774,11 +869,15 @@ module Shumway.GL {
       this.geometry.reset();
     }
 
-    public drawImage(src: WebGLTextureRegion, dstRectangle: Rectangle, color: Color, transform: Matrix) {
+    public drawImage(src: WebGLTextureRegion, dstRectangle: Rectangle, color: Color, transform: Matrix): boolean {
       if (!dstRectangle) {
         dstRectangle = new Rectangle(0, 0, src.region.w, src.region.h);
       } else {
         dstRectangle = dstRectangle.clone();
+      }
+      if (!src.texture) {
+        this.fillRectangle(dstRectangle, Color.Red, transform);
+        return true;
       }
       var sampler = this.textures.indexOf(src.texture);
       if (sampler < 0) {
@@ -824,7 +923,7 @@ module Shumway.GL {
       this.geometry.addQuad();
     }
 
-    public draw() {
+    public draw(drawElements: boolean = true) {
       var g = this.geometry;
       var p = this.program;
       var gl = this.context.gl;
@@ -853,7 +952,9 @@ module Shumway.GL {
       }
       // Bind elements buffer.
       gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, g.elementBuffer);
-      gl.drawElements(gl.TRIANGLES, g.triangleCount * 3, gl.UNSIGNED_SHORT, 0);
+      if (drawElements) {
+        gl.drawElements(gl.TRIANGLES, g.triangleCount * 3, gl.UNSIGNED_SHORT, 0);
+      }
     }
   }
 }

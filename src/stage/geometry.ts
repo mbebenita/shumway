@@ -1,6 +1,15 @@
 /// <reference path='all.ts'/>
 module Shumway.Geometry {
 
+  function clamp(x: number, min: number, max: number): number {
+    if (x < min) {
+      return min;
+    } else if (x > max) {
+      return max;
+    }
+    return x;
+  }
+
   export class Point {
     x: number;
     y: number;
@@ -221,6 +230,11 @@ module Shumway.Geometry {
     resize (w: number, h: number): Rectangle  {
       this.w += w;
       this.h += h;
+      return this;
+    }
+
+    expand (w: number, h: number): Rectangle  {
+      this.offset(-w, -h).resize(2 * w, 2 * h);
       return this;
     }
 
@@ -767,7 +781,7 @@ module Shumway.Geometry {
     private _root: RectanglePacker.Cell;
     private _padding: number;
     constructor(w: number, h: number, padding: number) {
-      this._root = new Shumway.Geometry.RectanglePacker.Cell(0, 0, w, h, false);
+      this._root = new Shumway.Geometry.RectanglePacker.Cell(padding, padding, w - 2 * padding, h - 2 * padding, false);
       this._padding = padding;
     }
 
@@ -1098,6 +1112,11 @@ module Shumway.Geometry {
       var minY = queryBounds.y / this.size | 0;
       var maxX = Math.ceil((queryBounds.x + queryBounds.w) / this.size) | 0;
       var maxY = Math.ceil((queryBounds.y + queryBounds.h) / this.size) | 0;
+
+      minX = clamp(minX, 0, this.columns);
+      maxX = clamp(maxX, 0, this.columns);
+      minY = clamp(minY, 0, this.rows);
+      maxY = clamp(maxY, 0, this.rows);
 
       var tiles = [];
       for (var x = minX; x < maxX; x++) {

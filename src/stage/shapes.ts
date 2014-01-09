@@ -66,7 +66,39 @@ module Shumway {
     }
   }
 
-  export var Shapes = [
+  export class CheckerShape implements IRenderable {
+    w: number;
+    h: number;
+    size: number;
+    properties: {[name: string]: any} = {};
+    constructor(w: number, h: number, size: number) {
+      this.w = w;
+      this.h = h;
+      this.size = size;
+    }
+
+    getBounds (): Rectangle {
+      return new Rectangle(0, 0, this.w * this.size, this.h * this.size);
+    }
+    render (context: CanvasRenderingContext2D) {
+
+      context.save();
+      var index = 0;
+      for (var x = 0; x < this.w; x++) {
+        for (var y = 0; y < this.h; y++) {
+          var dark = (x + y) % 2 | 0;
+          context.fillStyle = dark ? "gray" : "white";
+          context.fillRect(x * this.size, y * this.size, this.size, this.size);
+          context.fillStyle = !dark ? "black" : "white";
+          var offset = 2;
+          context.fillText(String(index++), offset + x * this.size + 2, offset + y * this.size + 10);
+        }
+      }
+      context.restore();
+    }
+  }
+
+  export var Shapes: IRenderable [] = [
     new VectorShape(loadShape("sword.json")),
     new VectorShape(loadShape("decorate.json")),
     new VectorShape(loadShape("background.json")),
@@ -75,9 +107,18 @@ module Shumway {
     new VectorShape(loadShape("wide.json"))
   ];
 
-//  loadShape("assets.json").forEach(function (shape) {
-//    Shapes.push(new VectorShape(shape));
-//  });
+  loadShape("assets.json").forEach(function (shape) {
+    Shapes.push(new VectorShape(shape));
+  });
+
+  Shapes = [];
+  Shapes.push (
+    new CheckerShape(500, 10, 64)
+  );
+
+//  Shapes = [
+//    new VectorShape(loadShape("wide.json"))
+//  ];
 
   export function getRandomShape() {
     return Shapes[Math.random() * Shapes.length | 0];
@@ -104,6 +145,56 @@ module Shumway {
     return new ImageShape(image);
   }
 
+  var scratchCanvas = document.createElement("canvas");
+  var scratchCanvasContext = scratchCanvas.getContext("2d");
+
+  export class TextShape implements IRenderable {
+    _text: string;
+    _bounds: Rectangle;
+    _lines: string [][];
+    _fontSize: number = 18;
+    _lineHeight: number = 20;
+    _lineMaxWidth: number = 1024;
+    constructor(text: string) {
+      this._text = text;
+
+      scratchCanvasContext.font = this._fontSize + "px Open Sans";
+      var words = this._text.split(" ");
+      var lines = [];
+      var run = 0;
+      var line = [];
+      var spaceLength = scratchCanvasContext.measureText(" ").width;
+      for (var i = 0; i < words.length; i++) {
+        var wordLength = scratchCanvasContext.measureText(words[i]).width;
+        if (run + wordLength > this._lineMaxWidth) {
+          lines.push(line);
+          line = [];
+          run = 0;
+        } else {
+          line.push(words[i]);
+          run += wordLength + spaceLength;
+        }
+      }
+      if (line.length) {
+        lines.push(line);
+      }
+      this._lines = lines;
+      this._bounds = new Rectangle(0, 0, this._lineMaxWidth, this._lineHeight + lines.length * this._lineHeight);
+    }
+    properties: {[name: string]: any} = {};
+    getBounds (): Rectangle {
+      return this._bounds;
+    }
+    render (context: CanvasRenderingContext2D) {
+      context.save();
+      context.font = this._fontSize + "px Open Sans";
+      context.fillStyle = "white";
+      for (var i = 0; i < this._lines.length; i++) {
+        context.fillText(this._lines[i].join(" "), 0, this._lineHeight + i * this._lineHeight);
+      }
+      context.restore();
+    }
+  }
   export class SpriteShape implements IRenderable {
     private _index: number;
     private _bounds: Rectangle;
@@ -151,19 +242,33 @@ module Shumway {
   export function getSpriteShape(index) {
     return new SpriteShape(index);
   }
+
+  var sampleText = [
+    "Grumpy wizards make toxic brew for the evil Queen and Jack. One morning, when Gregor Samsa woke from troubled dreams, he found himself transformed in his bed into a horrible vermin. He lay on his armour-like back, and if he lifted his head a little he could see his brown belly, slightly domed and divided by arches into stiff sections. ",
+    "The bedding was hardly able to cover it and seemed ready to slide off any moment. His many legs, pitifully thin compared with the size of the rest of him, waved about helplessly as he looked. One morning, when Gregor Samsa woke from troubled dreams, he found himself transformed in his bed into a horrible vermin.",
+    "He lay on his armour-like back, and if he lifted his head a little he could see his brown belly, slightly domed and divided by arches into stiff sections. The bedding was hardly able to cover it and seemed ready to slide off any moment. His many legs, pitifully thin compared with the size of the rest of him, waved about helplessly as he looked."
+  ];
+
+//  var sampleText = [
+//    "Grumpy wizards make toxic brew for the evil Queen and Jack.",
+//    "The bedding was hardly able to cover it and seemed ready to slide off any moment.",
+//    "He lay on his armour-like back, and if he lifted his head a little he could see his brown belly, slightly domed and divided by arches into stiff sections."
+//  ];
+
+  export function randomText(count: number = 0) {
+    var str = "";
+    for (var i = 0; i < count; i++) {
+      str += sampleText[Math.random() * sampleText.length | 0];
+    }
+    return str;
+  }
 }
+
+
 
 /*
 
-var sampleText = [
-  "Grumpy wizards make toxic brew for the evil Queen and Jack. One morning, when Gregor Samsa woke from troubled dreams, he found himself transformed in his bed into a horrible vermin. He lay on his armour-like back, and if he lifted his head a little he could see his brown belly, slightly domed and divided by arches into stiff sections. ",
-  "The bedding was hardly able to cover it and seemed ready to slide off any moment. His many legs, pitifully thin compared with the size of the rest of him, waved about helplessly as he looked. One morning, when Gregor Samsa woke from troubled dreams, he found himself transformed in his bed into a horrible vermin.",
-  "He lay on his armour-like back, and if he lifted his head a little he could see his brown belly, slightly domed and divided by arches into stiff sections. The bedding was hardly able to cover it and seemed ready to slide off any moment. His many legs, pitifully thin compared with the size of the rest of him, waved about helplessly as he looked."
-];
 
-function randomText() {
-  return sampleText[Math.random() * sampleText.length | 0];
-}
 
 function renderTextShape(str) {
   return function renderText(c) {

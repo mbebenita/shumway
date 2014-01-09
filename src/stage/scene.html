@@ -95,12 +95,13 @@
       tween.easing(easing);
       function next() {
         var w = 128, h = 128;
-        var x = Math.max(0, Math.random() * 1000);
-        var y = Math.max(0, Math.random() * 1000);
-//        var x = 100, y = 100;
+        // var x = Math.max(0, Math.random() * Math.max(1000, target.w));
+        var x = Math.max(0, Math.random() * stage.w);
+        var y = Math.max(0, Math.random() * stage.h);
 
         // var s = 0.5;
-        var s = 0.25 + Math.random() * 4;
+        var s = 0.1 + Math.random() * 2;
+        var s = 0.1 + Math.random();
 //        var s = 1;
 //        var s = (Math.random() - 0.5) * 2;
         tween.easing(easing);
@@ -145,8 +146,8 @@
     var pixelRatio = 'devicePixelRatio' in window ? window.devicePixelRatio : 1;
     // var pixelRatio = 1;
 
-    var width = (window.innerWidth * 0.8) / 2 | 0;
-    var height = (window.innerHeight * 0.8) / 1 | 0;
+    var width = (window.innerWidth * 0.8) | 0;
+    var height = (window.innerHeight * 0.8) | 0;
 
     var gui = new dat.GUI();
 
@@ -166,7 +167,6 @@
       bitmaps: 2,
       videos: 2,
       text: 1,
-      cacheAsBitmap: false,
       webGL: false,
       canvas2D: false,
 
@@ -177,6 +177,8 @@
       render: true,
       animate: true,
       drawElements: true,
+      drawTiles: true,
+      drawTextures: true,
       drawDirtyRegions: false,
       drawLayers: false,
       clear: true,
@@ -184,6 +186,7 @@
       snap: false,
       alpha: false,
       frameRate: 5,
+      frameCount: 100,
 
       stop: function () {
         frames = Number.MAX_VALUE;
@@ -191,6 +194,13 @@
     };
 
     gui.remember(sceneOptions);
+
+    (function addButtons() {
+      var f = gui.addFolder("Commands");
+      var c = [];
+      c.push(f.add(sceneOptions, "stop"));
+      f.open();
+    })();
 
     (function addSceneOptions() {
       var f = gui.addFolder("Scene Options");
@@ -201,7 +211,6 @@
       c.push(f.add(sceneOptions, "bitmaps", 0, 10000).step(2));
       c.push(f.add(sceneOptions, "videos", 0, 1000).step(1));
       c.push(f.add(sceneOptions, "text", 0, 1000).step(1));
-      c.push(f.add(sceneOptions, "cacheAsBitmap"));
       c.forEach(function (x) {
         x.onFinishChange(updateScene);
       })
@@ -218,8 +227,11 @@
       c.push(f.add(sceneOptions, "redraw", 0, 200).step(1));
       c.push(f.add(sceneOptions, "useStencil"));
       c.push(f.add(sceneOptions, "frameRate", 1, 60).step(1));
+      c.push(f.add(sceneOptions, "frameCount", 1, 10000).step(1));
       c.push(f.add(sceneOptions, "render"));
       c.push(f.add(sceneOptions, "drawElements"));
+      c.push(f.add(sceneOptions, "drawTiles"));
+      c.push(f.add(sceneOptions, "drawTextures"));
       c.push(f.add(sceneOptions, "animate"));
       c.push(f.add(sceneOptions, "drawDirtyRegions"));
       c.push(f.add(sceneOptions, "drawLayers"));
@@ -231,13 +243,6 @@
       c.forEach(function (x) {
         x.onFinishChange(updateOptions);
       })
-    })();
-
-    (function addButtons() {
-      var f = gui.addFolder("Commands");
-      var c = [];
-      c.push(f.add(sceneOptions, "stop"));
-      f.open();
     })();
 
     var webGLContext, canvas2DContext, webGLStageRenderer, canvas2DStageRenderer;
@@ -296,7 +301,7 @@
       // document.getElementById("container").appendChild(fontAtlas.canvas);
 
       for (var i = 0; i < sceneOptions.text; i++) {
-        var frame = new Shape(renderTextShape(randomText()), 256, 200, sceneOptions.cacheAsBitmap);
+        var frame = new Shape(new Shumway.TextShape(Shumway.randomText(100)));
         frame.x = (Math.random()) * canvas.width;
         frame.y = (Math.random()) * canvas.height;
         // frame.alpha = Math.random();
@@ -310,7 +315,6 @@
         frame.origin = new Point(frame.w / 2, frame.h / 2);
         // frame.origin.x = 0;
         // frame.origin.y = 0;
-        // var frame = new Shape(renderGuy, 100, 110, sceneOptions.cacheAsBitmap);
         frame.x = (Math.random()) * canvas.width;
         frame.y = (Math.random()) * canvas.height;
         // frame.alpha = Math.random();
@@ -319,7 +323,7 @@
       }
 
       for (var i = 0; i < sceneOptions.sprites; i++) {
-        var shape = Shumway.getSpriteShape(i)
+        var shape = Shumway.getSpriteShape(i);
         var frame = new Shape(shape);
         frame.origin = new Point(frame.w / 2, frame.h / 2);
         frame.x = (Math.random()) * canvas.width;
@@ -447,7 +451,7 @@
       // FrameCounter.trace(writer);
 
       stage.dirtyRegion.clear();
-      if (frames ++ < 10000) {
+      if (frames ++ < sceneOptions.frameCount) {
         requestAnimationFrame(tick);
       }
     })();
