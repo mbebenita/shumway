@@ -51,6 +51,8 @@ console = {
 load(homePath + "src/avm2/settings.js");
 load(homePath + "src/avm2/global.js");
 load(homePath + "src/avm2/utilities.js");
+load(homePath + "src/avm2/int.js");
+quit();
 
 var assert = Shumway.Debug.assert;
 
