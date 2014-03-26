@@ -11,6 +11,7 @@ module Shumway.Layers {
   import Matrix = Shumway.Geometry.Matrix;
   import DirtyRegion = Shumway.Geometry.DirtyRegion;
   import Filter = Shumway.Layers.Filter;
+  import BlendMode = Shumway.Layers.BlendMode;
   import TileCache = Shumway.Geometry.TileCache;
   import Tile = Shumway.Geometry.Tile;
   import OBB = Shumway.Geometry.OBB;
@@ -266,7 +267,7 @@ module Shumway.Layers {
 
       root.visit(function visitFrame(frame: Frame, transform?: Matrix, flags?: FrameFlags): VisitorFlags {
 
-        context.globalCompositeOperation = self.getBlendModeName(frame.blendMode);
+        context.globalCompositeOperation = self.getCompositeOperation(frame.blendMode);
 
         context.save();
         context.setTransform(transform.a, transform.b, transform.c, transform.d, transform.tx, transform.ty);
@@ -339,7 +340,7 @@ module Shumway.Layers {
       }
     }
 
-    private getBlendModeName(blendMode) {
+    private getCompositeOperation(blendMode: BlendMode): string {
       // TODO:
 
       // These Flash blend modes have no canvas equivalent:
@@ -355,26 +356,19 @@ module Shumway.Layers {
       // - blendModeClass.ERASE (destination-out)
       // - blendModeClass.LAYER [defines backdrop]
 
-      var blendModes = [
-        "normal",
-        "normal",
-        "normal",     // 2 layer
-        "multiply",
-        "screen",
-        "lighten",
-        "darken",
-        "difference",
-        "normal",     // 8 add
-        "normal",     // 9 subtract
-        "normal",     // 10 invert
-        "normal",     // 11 alpha
-        "normal",     // 12 erase
-        "overlay",
-        "hard-light",
-        "normal"      // 15 shader
-      ];
+      var compositeOp: string = "normal";
 
-      return blendModes[blendMode] || 'normal';
+      switch (blendMode) {
+        case BlendMode.MULTIPLY:   compositeOp = "multiply";   break;
+        case BlendMode.SCREEN:     compositeOp = "screen";     break;
+        case BlendMode.LIGHTEN:    compositeOp = "lighten";    break;
+        case BlendMode.DARKEN:     compositeOp = "darken";     break;
+        case BlendMode.DIFFERENCE: compositeOp = "difference"; break;
+        case BlendMode.OVERLAY:    compositeOp = "overlay";    break;
+        case BlendMode.HARDLIGHT:  compositeOp = "hard-light"; break;
+      }
+
+      return compositeOp;
     }
 
   }
