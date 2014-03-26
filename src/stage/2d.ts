@@ -265,6 +265,9 @@ module Shumway.Layers {
       }
 
       root.visit(function visitFrame(frame: Frame, transform?: Matrix, flags?: FrameFlags): VisitorFlags {
+
+        context.globalCompositeOperation = self.getBlendModeName(frame.blendMode);
+
         context.save();
         context.setTransform(transform.a, transform.b, transform.c, transform.d, transform.tx, transform.ty);
         context.globalAlpha = frame.getConcatenatedAlpha();
@@ -335,5 +338,44 @@ module Shumway.Layers {
         context.restore();
       }
     }
+
+    private getBlendModeName(blendMode) {
+      // TODO:
+
+      // These Flash blend modes have no canvas equivalent:
+      // - blendModeClass.SUBTRACT
+      // - blendModeClass.INVERT
+      // - blendModeClass.SHADER
+      // - blendModeClass.ADD
+
+      // These blend modes are actually Porter-Duff compositing operators.
+      // The backdrop is the nearest parent with blendMode set to LAYER.
+      // When there is no LAYER parent, they are ignored (treated as NORMAL).
+      // - blendModeClass.ALPHA (destination-in)
+      // - blendModeClass.ERASE (destination-out)
+      // - blendModeClass.LAYER [defines backdrop]
+
+      var blendModes = [
+        "normal",
+        "normal",
+        "normal",     // 2 layer
+        "multiply",
+        "screen",
+        "lighten",
+        "darken",
+        "difference",
+        "normal",     // 8 add
+        "normal",     // 9 subtract
+        "normal",     // 10 invert
+        "normal",     // 11 alpha
+        "normal",     // 12 erase
+        "overlay",
+        "hard-light",
+        "normal"      // 15 shader
+      ];
+
+      return blendModes[blendMode] || 'normal';
+    }
+
   }
 }
