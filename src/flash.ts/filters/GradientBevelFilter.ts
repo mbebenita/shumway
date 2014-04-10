@@ -1,12 +1,12 @@
 /**
  * Copyright 2013 Mozilla Foundation
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -17,31 +17,31 @@
 module Shumway.AVM2.AS.flash.filters {
   import notImplemented = Shumway.Debug.notImplemented;
   export class GradientBevelFilter extends flash.filters.BitmapFilter {
-    
+
     // Called whenever the class is initialized.
     static classInitializer: any = null;
-    
+
     // Called whenever an instance of the class is initialized.
     static initializer: any = null;
-    
+
     // List of static symbols to link.
     static staticBindings: string [] = null; // [];
-    
+
     // List of instance symbols to link.
     static bindings: string [] = null; // ["clone"];
-    
+
     constructor (distance: number = 4, angle: number = 45, colors: any [] = null, alphas: any [] = null, ratios: any [] = null, blurX: number = 4, blurY: number = 4, strength: number = 1, quality: number /*int*/ = 1, type: string = "inner", knockout: boolean = false) {
       distance = +distance; angle = +angle; colors = colors; alphas = alphas; ratios = ratios; blurX = +blurX; blurY = +blurY; strength = +strength; quality = quality | 0; type = "" + type; knockout = !!knockout;
       false && super();
       notImplemented("Dummy Constructor: public flash.filters.GradientBevelFilter");
     }
-    
+
     // JS -> AS Bindings
-    
+
     clone: () => flash.filters.BitmapFilter;
-    
+
     // AS -> JS Bindings
-    
+
     // _distance: number;
     // _angle: number;
     // _colors: any [];
