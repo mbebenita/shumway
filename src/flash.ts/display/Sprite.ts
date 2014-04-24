@@ -1,5 +1,5 @@
 /**
- * Copyright 2013 Mozilla Foundation
+ * Copyright 2014 Mozilla Foundation
  * 
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,25 +17,30 @@
 module Shumway.AVM2.AS.flash.display {
   import notImplemented = Shumway.Debug.notImplemented;
   import asCoerceString = Shumway.AVM2.Runtime.asCoerceString;
-  import DisplayObjectContainer = flash.display.DisplayObjectContainer;
+
+  var DisplayObjectContainer: typeof flash.display.DisplayObjectContainer;
+
   export class Sprite extends flash.display.DisplayObjectContainer {
 
     // Called whenever the class is initialized.
-    static classInitializer: any = null;
+    static classInitializer: any = function () {
+      DisplayObjectContainer = flash.display.DisplayObjectContainer;
+    };
     
     // Called whenever an instance of the class is initialized.
-    static initializer: any = function (symbol: MovieClip) {
+    static initializer: any = function (symbol: Shumway.SWF.timeline.SpriteSymbol) {
       var self: Sprite = this;
       self._buttonMode = false;
       self._dropTarget = null;
       self._hitArea = null;
       self._useHandCursor = true;
 
-      if (symbol) {
-        self._snapshots = symbol._snapshots || self._snapshots;
-      }
+      self._blueprint = null;
 
-      self.initChildren();
+      if (symbol) {
+        this._blueprint = symbol.blueprint;
+        this._initializeChildren();
+      }
     };
     
     // List of static symbols to link.
@@ -59,8 +64,9 @@ module Shumway.AVM2.AS.flash.display {
     _buttonMode: boolean;
     _dropTarget: flash.display.DisplayObject;
     _hitArea: flash.display.Sprite;
-    _snapshots: Shumway.SWF.timeline.Snapshot [];
     _useHandCursor: boolean;
+
+    _blueprint: Shumway.SWF.timeline.BluePrint;
 
     get graphics(): flash.display.Graphics {
       return this._graphics;
@@ -130,15 +136,8 @@ module Shumway.AVM2.AS.flash.display {
       notImplemented("public flash.display.Sprite::stopTouchDrag"); return;
     }
 
-    initChildren(): void {
-      var snapshot = this._snapshots[0];
-      var diff = snapshot.diff(null);
-      var states = diff.place;
-      for (var i = 0; i < states.length; i++) {
-        var state = states[i];
-        var child = state.make();
-        this.addChildAtDepth(child, child._depth);
-      }
+    initializeChildren(): void {
+      // TODO
     }
 
     constructChildren(): void {
@@ -149,10 +148,11 @@ module Shumway.AVM2.AS.flash.display {
           continue;
         }
         child.instanceConstructorNoInitialize();
-        //if (child._name) {
-        //  this[Multiname.getPublicQualifiedName(name)] = instance;
-        //}
+        if (child.name) {
+          this[Multiname.getPublicQualifiedName(name)] = child;
+        }
         child._setFlags(DisplayObjectFlags.Constructed);
+        // TODO dispatch added/addedToStage events
       }
     }
   }

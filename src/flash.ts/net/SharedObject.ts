@@ -1,5 +1,5 @@
 /**
- * Copyright 2013 Mozilla Foundation
+ * Copyright 2014 Mozilla Foundation
  * 
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -73,7 +73,7 @@ module Shumway.AVM2.AS.flash.net {
       obj._data = null;
       obj._objectEncoding = SharedObject._defaultObjectEncoding;
 
-      Telemetry.reportTelemetry({topic: 'feature', feature: Telemetry.Feature.SHAREDOBJECT_FEATURE});
+      Telemetry.instance.reportTelemetry({topic: 'feature', feature: Telemetry.Feature.SHAREDOBJECT_FEATURE});
       return obj;
     }
     static getLocal(name: string, localPath: string = null, secure: boolean = false): flash.net.SharedObject {

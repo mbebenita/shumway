@@ -1,5 +1,5 @@
 /**
- * Copyright 2013 Mozilla Foundation
+ * Copyright 2014 Mozilla Foundation
  * 
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,7 +38,7 @@ module Shumway.AVM2.AS.flash.net {
     
     constructor () {
       false && super(undefined);
-      notImplemented("Dummy Constructor: public flash.net.FileFilter");
+      notImplemented("Dummy Constructor: public flash.net.NetConnection");
     }
     
     // JS -> AS Bindings
@@ -164,7 +164,7 @@ module Shumway.AVM2.AS.flash.net {
       this._objectEncoding = NetConnection.defaultObjectEncoding;
       this._usingTLS = false;
 
-      Telemetry.reportTelemetry({topic: 'feature', feature: Telemetry.Feature.NETCONNECTION_FEATURE});
+      Telemetry.instance.reportTelemetry({topic: 'feature', feature: Telemetry.Feature.NETCONNECTION_FEATURE});
     }
     invoke(index: number /*uint*/): any {
       index = index >>> 0;

@@ -87,7 +87,7 @@ var playerglobalInfo = {
 
 function runViewer() {
   var flashParams = JSON.parse(FirefoxCom.requestSync('getPluginParams', null));
-  FileLoadingService.setBaseUrl(flashParams.baseUrl);
+  Shumway.FileLoadingService.instance.setBaseUrl(flashParams.baseUrl);
 
   movieUrl = flashParams.url;
   if (!movieUrl) {
@@ -201,13 +201,13 @@ window.addEventListener("message", function handlerMessage(e) {
   }
 }, true);
 
-var TelemetryService = {
+Shumway.Telemetry.instance = {
   reportTelemetry: function (data) {
     FirefoxCom.request('reportTelemetry', data, null);
   }
 };
 
-var FileLoadingService = {
+Shumway.FileLoadingService.instance = {
   get baseUrl() { return movieUrl; },
   nextSessionId: 1, // 0 - is reserved
   sessions: [],
@@ -262,6 +262,28 @@ var FileLoadingService = {
   }
 };
 
+Shumway.ExternalInterfaceService.instance = {
+  enabled: true,
+  initJS: function (callback) {
+    FirefoxCom.initJS(callback);
+  },
+  registerCallback: function (functionName) {
+    FirefoxCom.request('externalCom', {action: 'register', functionName: functionName, remove: false});
+  },
+  unregisterCallback: function (functionName) {
+    FirefoxCom.request('externalCom', {action: 'register', functionName: functionName, remove: true});
+  },
+  eval: function (expression) {
+    return FirefoxCom.requestSync('externalCom', {action: 'eval', expression: expression});
+  },
+  call: function (request) {
+    return FirefoxCom.requestSync('externalCom', {action: 'call', request: request});
+  },
+  getId: function () {
+    return FirefoxCom.requestSync('externalCom', {action: 'getId'});
+  }
+};
+
 function parseSwf(url, movieParams, objectParams) {
   var enableVerifier = Shumway.AVM2.Runtime.enableVerifier;
   var EXECUTION_MODE = Shumway.AVM2.Runtime.EXECUTION_MODE;
@@ -304,7 +326,7 @@ function frame(e) {
     // marking that movie is started
     document.body.classList.add("started");
 
-    TelemetryService.reportTelemetry({topic: "firstFrame"});
+    Shumway.Telemetry.instance.reportTelemetry({topic: "firstFrame"});
 
     // skipping frame 0
     initializeFrameControl = false;

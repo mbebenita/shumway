@@ -1,7 +1,7 @@
 /* -*- Mode: js; js-indent-level: 2; indent-tabs-mode: nil; tab-width: 2 -*- */
 /* vim: set shiftwidth=2 tabstop=2 autoindent cindent expandtab: */
 /*
- * Copyright 2013 Mozilla Foundation
+ * Copyright 2014 Mozilla Foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@ module Shumway.AVM2.Runtime {
   import ClassInfo = Shumway.AVM2.ABC.ClassInfo;
   import InstanceInfo = Shumway.AVM2.ABC.InstanceInfo;
   import ScriptInfo = Shumway.AVM2.ABC.ScriptInfo;
+  import Callback = Shumway.Callback;
 
   import createEmptyObject = Shumway.ObjectUtilities.createEmptyObject;
   import IndentingWriter = Shumway.IndentingWriter;
@@ -35,7 +36,6 @@ module Shumway.AVM2.Runtime {
   declare var compileAbc;
   declare var compileAbc;
   declare var Promise;
-  declare var Callback;
   declare var natives;
   declare var Counter: Shumway.Metrics.Counter;
   declare var Type;
@@ -45,7 +45,7 @@ module Shumway.AVM2.Runtime {
   declare var snarf;
   declare var newGlobal;
 
-  export enum EXECUTION_MODE {
+  export enum ExecutionMode {
     INTERPRET   = 0x1,
     COMPILE     = 0x2
   }
@@ -146,12 +146,12 @@ module Shumway.AVM2.Runtime {
     public exceptions: any [];
 
     public static instance: AVM2;
-    public static initialize(sysMode: EXECUTION_MODE, appMode: EXECUTION_MODE, loadAVM1: boolean) {
+    public static initialize(sysMode: ExecutionMode, appMode: ExecutionMode, loadAVM1: boolean) {
       assert (!AVM2.instance);
       AVM2.instance = new AVM2(sysMode, appMode, loadAVM1);
     }
 
-    constructor(sysMode: EXECUTION_MODE, appMode: EXECUTION_MODE, loadAVM1: boolean) {
+    constructor(sysMode: ExecutionMode, appMode: ExecutionMode, loadAVM1: boolean) {
       // TODO: this will change when we implement security domains.
       this.systemDomain = new ApplicationDomain(this, null, sysMode, true);
       this.applicationDomain = new ApplicationDomain(this, this.systemDomain, appMode, false);
@@ -248,10 +248,10 @@ module Shumway.AVM2.Runtime {
     classInfoCache: any;
     base: ApplicationDomain;
     allowNatives: boolean;
-    mode: EXECUTION_MODE;
-    onMessage: any;
+    mode: ExecutionMode;
+    onMessage: Callback;
     system: any;
-    constructor(vm, base, mode, allowNatives) {
+    constructor(vm: AVM2, base: ApplicationDomain, mode: ExecutionMode, allowNatives: boolean) {
       release || assert (vm instanceof AVM2);
       release || assert (isNullOrUndefined(base) || base instanceof ApplicationDomain);
 
@@ -576,4 +576,4 @@ module Shumway.AVM2.Runtime {
 var Glue = Shumway.AVM2.Runtime.Glue;
 import ApplicationDomain = Shumway.AVM2.Runtime.ApplicationDomain;
 import AVM2 = Shumway.AVM2.Runtime.AVM2;
-import EXECUTION_MODE = Shumway.AVM2.Runtime.EXECUTION_MODE;
+import EXECUTION_MODE = Shumway.AVM2.Runtime.ExecutionMode;

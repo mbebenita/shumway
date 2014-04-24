@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 Mozilla Foundation
+ * Copyright 2014 Mozilla Foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -116,6 +116,7 @@ module Shumway.AVM2.AS {
     public static instanceConstructorNoInitialize: any = null;
 
     public static initializer: any = null;
+    public static defaultInitializerArgument: any;
     public static initializers: any = null;
     public static classInitializer: any = null;
 
@@ -347,6 +348,7 @@ module Shumway.AVM2.AS {
      * Calls the initializers of an object in order.
      */
     static runInitializers(self: Object, argument: any) {
+      argument = argument || self.class.defaultInitializerArgument;
       var cls: ASClass = self.class;
       var initializers = cls.initializers;
       if (initializers) {
@@ -413,12 +415,37 @@ module Shumway.AVM2.AS {
     }
 
     static linkSymbols(self: ASClass) {
+      /**
+       * Only returns true if the symbol is available in debug or release modes. Only symbols
+       * followed by the  "!" suffix are available in release builds.
+       */
+      function containsSymbol(symbols: string [], name: string) {
+        for (var i = 0; i < symbols.length; i++) {
+          var symbol = symbols[i];
+          if (symbol.indexOf(name) >= 0) {
+            var releaseSymbol = symbol[symbol.length - 1] === "!";
+            if (releaseSymbol) {
+              symbol = symbol.slice(0, symbol.length - 1);
+            }
+            if (name !== symbol) {
+              continue;
+            }
+            if (release) {
+              return releaseSymbol;
+            }
+            return true;
+          }
+        }
+        return false;
+      }
+
       function link(symbols, traits, obj) {
         for (var i = 0; i < traits.length; i++) {
           var trait = traits[i];
-          if (symbols.indexOf(trait.name.name) < 0) {
+          if (!containsSymbol(symbols, trait.name.name)) {
             continue;
           }
+          assert (!trait.name.getNamespace().isPrivate(), "Why are you linking against private members?");
           if (trait.isConst()) {
             notImplemented("Don't link against const traits.");
             return;
@@ -476,6 +503,11 @@ module Shumway.AVM2.AS {
     initializer: (...args) => any;
 
     /**
+     * The default argument that gets passed to all initializers.
+     */
+    defaultInitializerArgument: any;
+
+    /**
      * Native class initializer.
      */
     classInitializer: (...args) => any;
@@ -511,12 +543,12 @@ module Shumway.AVM2.AS {
     instanceBindings: InstanceBindings;
 
     /**
-     * List of class symbols to link.
+     * List of additional class symbols to link in debug builds.
      */
     classSymbols: string [];
 
     /**
-     * List of instance symbols to link.
+     * List of additional instance symbols to link in debug builds.
      */
     instanceSymbols: string [];
 
@@ -768,6 +800,9 @@ module Shumway.AVM2.AS {
   }
 
   var ASClassPrototype = ASClass.prototype;
+
+  (<any>ASClassPrototype).call = Function.prototype.call;
+  (<any>ASClassPrototype).apply = Function.prototype.apply;
 
   export class ASFunction extends ASObject {
     public static baseClass: typeof ASClass = null;

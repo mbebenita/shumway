@@ -1,5 +1,5 @@
 /**
- * Copyright 2013 Mozilla Foundation
+ * Copyright 2014 Mozilla Foundation
  * 
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,8 +18,7 @@ module Shumway.AVM2.AS.flash.net {
   import notImplemented = Shumway.Debug.notImplemented;
   import asCoerceString = Shumway.AVM2.Runtime.asCoerceString;
   import somewhatImplemented = Shumway.Debug.somewhatImplemented;
-
-  declare var FileLoadingService;
+  import FileLoadingService = Shumway.FileLoadingService;
 
   export class LocalConnection extends flash.events.EventDispatcher {
     
@@ -60,7 +59,7 @@ module Shumway.AVM2.AS.flash.net {
     get domain(): string {
       somewhatImplemented("public flash.net.LocalConnection::get domain");
       // HACK some SWFs want to know where they are hosted
-      var url = FileLoadingService.resolveUrl('/');
+      var url = FileLoadingService.instance.resolveUrl('/');
       var m = /:\/\/(.+?)[:?#\/]/.exec(url);
       return m && m[1];
     }

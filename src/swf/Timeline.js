@@ -71,7 +71,7 @@ var Timeline = (function () {
     if (this.kinds[name] === undefined) {
       this.kinds[name] = this.kindCount ++;
       if (this.kindCount > this.fillStyles.length) {
-        this.fillStyles.push(randomStyle());
+        this.fillStyles.push(ColorStyle.randomStyle());
       }
     }
     return this.kinds[name];
@@ -219,6 +219,24 @@ var Timeline = (function () {
     context.stroke();
 
     context.restore();
+
+
+    /**
+     * Draw Labels
+     */
+    context.fillStyle = textColor;
+    for (var i = 0; i < frames.length - 1; i++) {
+      var frame = frames[i];
+      var elapsedTime = frame.endTime - frame.startTime;
+      if (elapsedTime >= 2) {
+        offsetW = (i + 1) * (w + gap) - 3;
+        context.save();
+        context.translate(offsetW, 40);
+        context.rotate(-Math.PI / 2);
+        context.fillText(elapsedTime | 0, 0, 0);
+        context.restore();
+      }
+    }
 
     /**
      * Draw Info

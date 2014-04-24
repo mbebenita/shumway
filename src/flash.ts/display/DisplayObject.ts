@@ -1,5 +1,5 @@
 /**
- * Copyright 2013 Mozilla Foundation
+ * Copyright 2014 Mozilla Foundation
  * 
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
  * http://aaronhardy.com/flex/displayobject-quirks-and-tips/
  * http://blog.anselmbradford.com/2009/02/12/flash-movie-clip-transformational-properties-explorer-x-y-width-height-more/
  * http://gskinner.com/blog/archives/2007/08/annoying_as3_bu.html
+ * http://blog.dennisrobinson.name/getbounds-getrect-unexpected-results/
  *
  */
 // Class: DisplayObject
@@ -92,40 +93,47 @@ module Shumway.AVM2.AS.flash.display {
     InvalidConcatenatedMatrix                 = 0x0010,
 
     /**
+     * Display object has an invalid inverted concatenated matrix because its matrix or one of its ancestor's matrices has been
+     * mutated. We don't always need to compute the inverted matrix. This is why we use a sepearete invalid flag for it and don't
+     * roll it under the |InvalidConcatenatedMatrix| flag.
+     */
+    InvalidInvertedConcatenatedMatrix         = 0x0020,
+
+    /**
      * Display object has an invalid concatenated color transform because its color transform or one of its ancestor's color
      * transforms has been mutated.
      */
-    InvalidConcatenatedColorTransform         = 0x0020,
+    InvalidConcatenatedColorTransform         = 0x0040,
 
     /**
      * Display object has changed since the last time it was drawn.
      */
-    InvalidPaint                              = 0x0040,
+    InvalidPaint                              = 0x0080,
 
     /**
      * The display object's constructor has been executed or any of the derived class constructors have executed. It may be
      * that the derived class doesn't call super, in such cases this flag must be set manually elsewhere.
      */
-    Constructed                               = 0x0080,
+    Constructed                               = 0x0100,
 
     /**
      * Display object has been removed by the timeline but it no longer recieves any event.
      */
-    Destroyed                                 = 0x0100,
+    Destroyed                                 = 0x0200,
 
     /**
      * Display object is owned by the timeline, meaning that it is under the control of the timeline and that a reference
      * to this object has not leaked into AS3 code via the DisplayObjectContainer methods |getChildAt|,  |getChildByName|
      * or through the execution of the symbol class constructor.
      */
-    OwnedByTimeline                           = 0x0200,
+    OwnedByTimeline                           = 0x0400,
 
     /**
      * Display object is animated by the timeline. It may no longer be owned by the timeline (|OwnedByTimeline|) but it
      * is still animated by it. If AS3 code mutates any property on the display object, this flag is cleared and further
      * timeline mutations are ignored.
      */
-    AnimatedByTimeline                        = 0x0400,
+    AnimatedByTimeline                        = 0x0800,
 
     /**
      * Indicates whether this display object should be cached as a bitmap. The display object
@@ -139,6 +147,11 @@ module Shumway.AVM2.AS.flash.display {
    * Controls how the visitor walks the display tree.
    */
   export enum VisitorFlags {
+    /**
+     * None
+     */
+    None         = 0,
+
     /**
      * Continue with normal traversal.
      */
@@ -160,9 +173,23 @@ module Shumway.AVM2.AS.flash.display {
     FrontToBack  = 8
   }
 
+  /*
+   * Note: Private or protected functions are prefixed with "_" and *may* return objects that
+   * should not be mutated. This is for performance reasons and it's up to you to make sure
+   * such return values are cloned.
+   *
+   * Private or protected functions usually operate on twips, public functions work with pixels
+   * since that's what the AS3 specifies.
+   */
+
   export class DisplayObject extends flash.events.EventDispatcher implements IBitmapDrawable {
 
+    /**
+     * Every displayObject is assigned an unique integer ID.
+     */
+    private static _nextID = 0;
     private static _instances: DisplayObject [];
+
 
     // Called whenever the class is initialized.
     static classInitializer: any = function () {
@@ -179,11 +206,16 @@ module Shumway.AVM2.AS.flash.display {
     }
 
     // Called whenever an instance of the class is initialized.
-    static initializer: any = function (symbol: DisplayObject) {
+    static initializer: any = function (symbol: Shumway.SWF.timeline.Symbol) {
       var self: DisplayObject = this;
       var instanceName = DisplayObject.register(self);
 
-      self._flags = DisplayObjectFlags.Visible;
+      self._flags = DisplayObjectFlags.Visible                            |
+                    DisplayObjectFlags.InvalidBounds                      |
+                    DisplayObjectFlags.InvalidMatrix                      |
+                    DisplayObjectFlags.InvalidConcatenatedMatrix          |
+                    DisplayObjectFlags.InvalidInvertedConcatenatedMatrix;
+
       self._root = null;
       self._stage = null;
       self._name = instanceName;
@@ -210,10 +242,12 @@ module Shumway.AVM2.AS.flash.display {
       self._loaderInfo = null;
       self._accessibilityProperties = null;
 
-      self._bounds = null;
+      self._rect = new Rectangle();
+      self._bounds = new Rectangle();
       self._clipDepth = 0;
 
       self._concatenatedMatrix = new Matrix();
+      self._invertedConcatenatedMatrix = new Matrix();
       self._matrix = new Matrix();
       self._matrix3D = null;
       self._colorTransform = new ColorTransform();
@@ -225,51 +259,13 @@ module Shumway.AVM2.AS.flash.display {
       self._index = -1;
       self._maskedObject = null;
 
-      self._rect = new Rectangle();
-      self._bounds = new Rectangle();
-
-      self._removeFlags (
-        DisplayObjectFlags.AnimatedByTimeline    |
-        DisplayObjectFlags.InvalidBounds         |
-        DisplayObjectFlags.Constructed           |
-        DisplayObjectFlags.Destroyed             |
-        DisplayObjectFlags.OwnedByTimeline       |
-        DisplayObjectFlags.InvalidMatrix
-      );
-
-      // TODO move to InteractiveObject
       self._mouseOver = false;
+      self._mouseDown = false;
 
       if (symbol) {
-        self._name        = symbol._name      || self._name;
-        self._parent      = symbol._parent    || self._parent;
-        self._clipDepth   = symbol._clipDepth || self._clipDepth;
-        self._blendMode   = symbol._blendMode || self._blendMode;
-        self._depth       = symbol._depth     || self._depth;
-
-        if (symbol._scale9Grid) {
-          self._scale9Grid = symbol._scale9Grid.clone();
-        }
-
-        if (symbol._hasFlags(DisplayObjectFlags.AnimatedByTimeline)) {
-          self._setFlags(DisplayObjectFlags.AnimatedByTimeline);
-        }
-
-//        if (symbol.bbox) {
-//          var bbox = symbol.bbox;
-//          self._bounds.setTo(bbox.xMin, bbox.yMin, bbox.xMax - bbox.xMin, bbox.yMax - bbox.yMin);
-//        }
-
-        if (symbol._matrix) {
-          this._setMatrix(symbol._matrix, false);
-        }
-
-        if (symbol._colorTransform) {
-          this._setColorTransform(symbol._colorTransform);
-        }
-
-        if (symbol._hasFlags(DisplayObjectFlags.OwnedByTimeline)) {
-          self._setFlags(DisplayObjectFlags.OwnedByTimeline);
+        self._bounds.copyFrom(symbol.bounds);
+        if (symbol.scale9Grid) {
+          self._scale9Grid = symbol.scale9Grid.clone();
         }
       }
     };
@@ -284,6 +280,7 @@ module Shumway.AVM2.AS.flash.display {
       false && super(undefined);
       EventDispatcher.instanceConstructorNoInitialize();
       this._setFlags(DisplayObjectFlags.Constructed);
+      this._id = DisplayObject._nextID ++;
     }
 
     _setFlags(flags: DisplayObjectFlags) {
@@ -311,9 +308,11 @@ module Shumway.AVM2.AS.flash.display {
     }
 
     /**
-     * Propagates flags up and down the the display list.
+     * Propagates flags up and down the the display list. Flags propagation is short-circuited if
+     * if the flags are already set.
      */
     _propagateFlags(flags: DisplayObjectFlags, direction: Direction) {
+      // Multiple flags can be passed here, stop propagation when all the flags are set.
       if (this._hasFlags(flags)) {
         return;
       }
@@ -340,13 +339,9 @@ module Shumway.AVM2.AS.flash.display {
       }
     }
 
-    // JS -> AS Bindings
-    
-    hitTestObject: (obj: DisplayObject) => boolean;
-    hitTestPoint: (x: number, y: number, shapeFlag: boolean = false) => boolean;
-    
     // AS -> JS Bindings
 
+    private _id: number;
     private _flags: number;
 
     _root: DisplayObject;
@@ -356,7 +351,7 @@ module Shumway.AVM2.AS.flash.display {
     _mask: DisplayObject;
 
     /**
-     * These are always the most up to date properties. The |_matrix| is kepy in sync with
+     * These are always the most up to date properties. The |_matrix| is kept in sync with
      * these values.
      */
     _z: number;
@@ -405,6 +400,7 @@ module Shumway.AVM2.AS.flash.display {
 
 
     _concatenatedMatrix: flash.geom.Matrix;
+    _invertedConcatenatedMatrix: flash.geom.Matrix;
     _colorTransform: flash.geom.ColorTransform;
     _concatenatedColorTransform: flash.geom.ColorTransform;
     _matrix3D: flash.geom.Matrix3D;
@@ -420,41 +416,18 @@ module Shumway.AVM2.AS.flash.display {
 
     _isContainer: boolean;
     _maskedObject: DisplayObject;
-    _mouseChildren: boolean;
-    _mouseDown: boolean;
     _mouseOver: boolean;
+    _mouseDown: boolean;
 
-    /**
-     * Finds the furthest ancestor with a given set of flags.
-     */
-    private _findFurthestAncestor(flags: DisplayObjectFlags, on: boolean): DisplayObject {
-      var node = this;
-      var last = this._stage;
-      var oldest = null;
-      while (node) {
-        if (node._hasFlags(flags) === on) {
-          oldest = node;
-        }
-        if (node === last) {
-          break;
-        }
-        node = node._parent;
-      }
-      return oldest;
-    }
 
     /**
      * Finds the closest ancestor with a given set of flags that are either turned on or off.
      */
     private _findClosestAncestor(flags: DisplayObjectFlags, on: boolean): DisplayObject {
       var node = this;
-      var last = this._stage;
       while (node) {
         if (node._hasFlags(flags) === on) {
           return node;
-        }
-        if (node === last) {
-          return null;
         }
         node = node._parent;
       }
@@ -475,6 +448,9 @@ module Shumway.AVM2.AS.flash.display {
       return false;
     }
 
+    /**
+     * Clamps the rotation value to the range (-180, 180).
+     */
     private static _clampRotation(value): number {
       value %= 360;
       if (value > 180) {
@@ -517,12 +493,21 @@ module Shumway.AVM2.AS.flash.display {
         for (var i = path.length - 1; i >= 0; i--) {
           var ancestor = path[i];
           assert (ancestor._hasFlags(DisplayObjectFlags.InvalidConcatenatedMatrix));
-          m.concat(ancestor._getMatrix());
+          m.preMultiply(ancestor._getMatrix());
           ancestor._concatenatedMatrix.copyFrom(m);
           ancestor._removeFlags(DisplayObjectFlags.InvalidConcatenatedMatrix);
         }
       }
       return this._concatenatedMatrix;
+    }
+
+    _getInvertedConcatenatedMatrix(): Matrix {
+      if (this._hasFlags(DisplayObjectFlags.InvalidInvertedConcatenatedMatrix)) {
+        this._invertedConcatenatedMatrix.copyFrom(this._getConcatenatedMatrix());
+        this._invertedConcatenatedMatrix.invert();
+        this._removeFlags(DisplayObjectFlags.InvalidInvertedConcatenatedMatrix);
+      }
+      return this._invertedConcatenatedMatrix;
     }
 
     _setMatrix(matrix: Matrix, toTwips: boolean): void {
@@ -564,7 +549,7 @@ module Shumway.AVM2.AS.flash.display {
         for (var i = path.length - 1; i >= 0; i--) {
           var ancestor = path[i];
           assert (ancestor._hasFlags(DisplayObjectFlags.InvalidConcatenatedColorTransform));
-          m.concat(ancestor._colorTransform);
+          m.preMultiply(ancestor._colorTransform);
           ancestor._concatenatedColorTransform.copyFrom(m);
           ancestor._removeFlags(DisplayObjectFlags.InvalidConcatenatedColorTransform);
         }
@@ -588,19 +573,14 @@ module Shumway.AVM2.AS.flash.display {
     /**
      * Computes the bounding box for all of this display object's content, its graphics and all of its children.
      */
-   private _getContentBounds(includeStrokes: boolean = true): Rectangle {
+    private _getContentBounds(includeStrokes: boolean = true): Rectangle {
       // Tobias: What about filters?
       var rectangle = includeStrokes ? this._bounds : this._rect;
       if (this._hasFlags(DisplayObjectFlags.InvalidBounds)) {
         rectangle.setEmpty();
-        var graphics: Graphics = null;
-        if (Shape.isType(this)) {
-          graphics = (<Shape>this)._graphics;
-        } else if (Sprite.isType(this)) {
-          graphics = (<Sprite>this)._graphics;
-        }
+        var graphics: Graphics = this._getGraphics();
         if (graphics) {
-          rectangle.unionWith(graphics.getBounds(includeStrokes));
+          rectangle.unionWith(graphics._getContentBounds(includeStrokes));
         }
         if (DisplayObjectContainer.isType(this)) {
           var container: DisplayObjectContainer = <DisplayObjectContainer>this;
@@ -614,14 +594,20 @@ module Shumway.AVM2.AS.flash.display {
       return rectangle;
     }
 
+    /**
+     * Gets the bounds of this display object relative to another coordinate space. The transformation
+     * matrix from the local coordinate space to the target coordinate space is computed using:
+     *
+     *   this.concatenatedMatrix * inverse(target.concatenatedMatrix)
+     */
     private _getTransformedBounds(targetCoordinateSpace: DisplayObject, includeStroke: boolean = true) {
-      var bounds = this._getContentBounds(includeStroke);
+      var bounds = this._getContentBounds(includeStroke).clone();
       if (!targetCoordinateSpace || targetCoordinateSpace === this || bounds.isEmpty()) {
-        return bounds.clone();
+        return bounds;
       }
       var m = targetCoordinateSpace._getConcatenatedMatrix().clone();
       m.invert();
-      m.concat(this._getConcatenatedMatrix());
+      m.preMultiply(this._getConcatenatedMatrix());
       return m.transformRectAABB(bounds);
     }
 
@@ -640,14 +626,34 @@ module Shumway.AVM2.AS.flash.display {
      * Marks this object as having been moved in its parent display object.
      */
     _invalidatePosition() {
-      this._propagateFlags(DisplayObjectFlags.InvalidConcatenatedMatrix, Direction.Downward);
+      this._propagateFlags(DisplayObjectFlags.InvalidConcatenatedMatrix | DisplayObjectFlags.InvalidInvertedConcatenatedMatrix, Direction.Downward);
       if (this._parent) {
         this._parent._invalidateBounds();
       }
     }
 
+    /**
+     * WIP
+     */
+    _animate(state: Shumway.SWF.timeline.AnimationState): void {
+      this._depth = state.depth;
+      this._setMatrix(state.matrix, false);
+      this._setColorTransform(state.colorTransform);
+      this._ratio = state.ratio;
+      this._name = state.name;
+      this._clipDepth = state.clipDepth;
+      this._filters = state.filters;
+      this._blendMode = state.blendMode;
+      if (state.cacheAsBitmap) {
+        this._setFlags(flash.display.DisplayObjectFlags.CacheAsBitmap);
+      }
+      //info.actions
+      //this._setFlags(DisplayObjectFlags.AnimatedByTimeline);
+      //this._setFlags(DisplayObjectFlags.OwnedByTimeline);
+    }
+
     get x(): number {
-      return this._matrix.tx / 20;
+      return this._matrix.tx * 0.05;
     }
 
     set x(value: number) {
@@ -661,7 +667,7 @@ module Shumway.AVM2.AS.flash.display {
     }
 
     get y(): number {
-      return this._matrix.ty / 20;
+      return this._matrix.ty * 0.05;
     }
 
     set y(value: number) {
@@ -761,7 +767,7 @@ module Shumway.AVM2.AS.flash.display {
      */
     get width(): number {
       var bounds = this._getTransformedBounds(this._parent, true);
-      return bounds.width / 20;
+      return bounds.width * 0.05;
     }
 
     /**
@@ -794,7 +800,7 @@ module Shumway.AVM2.AS.flash.display {
      */
     get height(): number {
       var bounds = this._getTransformedBounds(this._parent, true);
-      return bounds.height / 20;
+      return bounds.height * 0.05;
     }
 
     /**
@@ -961,8 +967,7 @@ module Shumway.AVM2.AS.flash.display {
      * Converts a point from the global coordinate space into the local coordinate space.
      */
     globalToLocal(point: flash.geom.Point): flash.geom.Point {
-      var m = this._getConcatenatedMatrix().clone();
-      m.invert();
+      var m = this._getInvertedConcatenatedMatrix();
       return m.transformCoords(point.x, point.y, true).toPixels();
     }
 
@@ -982,7 +987,8 @@ module Shumway.AVM2.AS.flash.display {
       stack = [this];
       while (stack.length > 0) {
         displayObject = stack.pop();
-        if (visitor(displayObject) === VisitorFlags.Continue) {
+        var flags = visitor(displayObject);
+        if (flags === VisitorFlags.Continue) {
           if (DisplayObjectContainer.isType(displayObject)) {
             displayObjectContainer = <DisplayObjectContainer>displayObject;
             var children = displayObjectContainer._children;
@@ -992,6 +998,8 @@ module Shumway.AVM2.AS.flash.display {
               stack.push(child);
             }
           }
+        } else if (flags === VisitorFlags.Stop) {
+          return;
         }
       }
     }
@@ -1006,6 +1014,71 @@ module Shumway.AVM2.AS.flash.display {
         return root._loaderInfo;
       }
       return null;
+    }
+
+    /**
+     * Gets the graphics object of this object. Only Shapes, Sprites, and MorphShapes can have
+     * graphics.
+     */
+    private _getGraphics(): flash.display.Graphics {
+      if (flash.display.Shape.isType(this)) {
+        return (<flash.display.Shape>this)._graphics;
+      } else if (flash.display.Shape.isType(this)) {
+        return (<flash.display.Shape>this)._graphics;
+      } else if (flash.display.Shape.isType(this)) {
+        return (<flash.display.Shape>this)._graphics;
+      }
+      return null;
+    }
+
+    /**
+     * Checks if the bounding boxes of two display objects overlap, this happens in the global
+     * coordinate coordinate space.
+     *
+     * Two objects overlap even if one or both are not on the stage, as long as their bounds
+     * in the global coordinate space overlap.
+     */
+    hitTestObject(other: DisplayObject): boolean {
+      release || assert (other && DisplayObject.isType(other));
+      var a = this, b = other;
+      var aBounds = a._getContentBounds(false);
+      var bBounds = b._getContentBounds(false);
+      a._getConcatenatedMatrix().transformRectAABB(aBounds);
+      b._getConcatenatedMatrix().transformRectAABB(bBounds);
+      return aBounds.intersects(bBounds);
+    }
+
+    /**
+     * The |x| and |y| arguments are in global coordinates. The |shapeFlag| indicates whether
+     * the hit test should be on the actual pixels of the object |true| or just its bounding
+     * box |false|.
+     */
+    hitTestPoint(x: number, y: number, shapeFlag: boolean = false): boolean {
+      x = +x; y = +y; shapeFlag = !!shapeFlag;
+      var point = this._getInvertedConcatenatedMatrix().transformCoords(x, y, true);
+      if (!this._getContentBounds().containsPoint(point)) {
+        return false;
+      }
+      if (!shapeFlag) {
+        return true;
+      }
+      // TODO: Figure out if we need to test against the graphics path first
+      // and exit early instead of going down the children list. Testing the
+      // path can be more expensive sometimes, more so than testing the
+      // children.
+      if (DisplayObjectContainer.isType(this)) {
+        var children = (<DisplayObjectContainer>this)._children;
+        for (var i = 0; i < children.length; i++) {
+          if (children[i].hitTestPoint(x, y, shapeFlag)) {
+            return true;
+          }
+        }
+      }
+      var graphics = this._getGraphics();
+      if (graphics) {
+        return graphics._containsPoint(point);
+      }
+      return false;
     }
 
     // ---------------------------------------------------------------------------------------------------------------------------------------------
@@ -1070,7 +1143,7 @@ module Shumway.AVM2.AS.flash.display {
         return;
       }
 
-      if (BlendMode.isMember(value)) {
+      if (BlendMode.toNumber(value) >= 0) {
         this._blendMode = value;
       } else {
         throwError("ArgumentError", Errors.InvalidEnumError, "blendMode");

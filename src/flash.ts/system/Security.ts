@@ -1,5 +1,5 @@
 /**
- * Copyright 2013 Mozilla Foundation
+ * Copyright 2014 Mozilla Foundation
  * 
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,8 +18,6 @@ module Shumway.AVM2.AS.flash.system {
   import notImplemented = Shumway.Debug.notImplemented;
   import asCoerceString = Shumway.AVM2.Runtime.asCoerceString;
   import somewhatImplemented = Shumway.Debug.somewhatImplemented;
-
-  declare var FileLoadingService;
 
   export class Security extends ASNative {
     
@@ -75,7 +73,7 @@ module Shumway.AVM2.AS.flash.system {
     }
     static get pageDomain(): string {
       somewhatImplemented("public flash.system.Security::get pageDomain");
-      var pageHost: string = FileLoadingService.resolveUrl('/');
+      var pageHost: string = Shumway.FileLoadingService.instance.resolveUrl('/');
       var parts = pageHost.split('/'); parts.pop();
       return parts.pop();
     }

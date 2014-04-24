@@ -1,5 +1,5 @@
 /**
- * Copyright 2013 Mozilla Foundation
+ * Copyright 2014 Mozilla Foundation
  * 
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ module Shumway.AVM2.AS.flash.net {
   import notImplemented = Shumway.Debug.notImplemented;
   import asCoerceString = Shumway.AVM2.Runtime.asCoerceString;
   import ByteArray = Shumway.AVM2.AS.flash.utils.ByteArray;
+  import throwError = Shumway.AVM2.Runtime.throwError;
 
   export class URLRequest extends ASNative {
     
@@ -75,6 +76,14 @@ module Shumway.AVM2.AS.flash.net {
     get method(): string {
       return this._method;
     }
+    set method(value: string) {
+      value = asCoerceString(value);
+      if (value !== 'get' && value !== 'GET' &&
+          value !== 'post' && value !== 'POST') {
+        throwError('ArgumentError', Errors.ArgumentError);
+      }
+      this._method = value;
+    }
     get contentType(): string {
       return this._contentType;
     }
@@ -85,20 +94,18 @@ module Shumway.AVM2.AS.flash.net {
     get requestHeaders(): any [] {
       return this._requestHeaders;
     }
+    set requestHeaders(value: any []) {
+      if (!Array.isArray(value)) {
+        throwError('ArgumentError', Errors.ArgumentError);
+      }
+      this._requestHeaders = value;
+    }
     get digest(): string {
       return this._digest;
     }
     set digest(value: string) {
       value = asCoerceString(value);
       this._digest = value;
-    }
-    setMethod(value: string): any {
-      value = asCoerceString(value);
-      this._method = value;
-    }
-    setRequestHeaders(value: any []): any {
-      value = value;
-      this._requestHeaders = value;
     }
 
     _toFileRequest(): any {

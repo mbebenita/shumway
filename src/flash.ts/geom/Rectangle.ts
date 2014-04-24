@@ -1,5 +1,5 @@
 /**
- * Copyright 2013 Mozilla Foundation
+ * Copyright 2014 Mozilla Foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -153,7 +153,8 @@ module Shumway.AVM2.AS.flash.geom {
     public contains(x: number, y: number): boolean {
       x = +x;
       y = +y;
-      return this.x <= x && x <= this.right && this.y <= y && y <= this.bottom;
+      return x >= this.x && x <= this.right &&
+             y >= this.y && y <= this.bottom;
     }
 
     public containsPoint(point: Point): boolean {
@@ -229,6 +230,14 @@ module Shumway.AVM2.AS.flash.geom {
       this.y = sourceRect.y;
       this.width = sourceRect.width;
       this.height = sourceRect.height;
+    }
+
+    public fromBbox(bbox: any): Rectangle {
+      this.x = bbox.xMin;
+      this.y = bbox.yMin;
+      this.width = bbox.xMax - bbox.xMin;
+      this.height = bbox.yMax - bbox.yMin;
+      return this;
     }
 
     public setTo(x: number, y: number, width: number, height: number): void {

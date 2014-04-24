@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 Mozilla Foundation
+ * Copyright 2014 Mozilla Foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -396,8 +396,10 @@ module Shumway.AVM2.ABC {
     static parseParameterNames: boolean = false;
 
     private static _getParameterName(i) {
-      release || assert(i < 26);
-      return String.fromCharCode("A".charCodeAt(0) + i);
+      if (i < 26) {
+        return String.fromCharCode("A".charCodeAt(0) + i);
+      }
+      return "P" + (i - 26);
     }
 
     constructor(abc: AbcFile, index: number, stream: AbcStream) {

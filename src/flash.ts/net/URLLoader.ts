@@ -1,5 +1,5 @@
 /**
- * Copyright 2013 Mozilla Foundation
+ * Copyright 2014 Mozilla Foundation
  * 
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@ module Shumway.AVM2.AS.flash.net {
     static classSymbols: string [] = null; // [];
     
     // List of instance symbols to link.
-    static instanceSymbols: string [] = ["data", "dataFormat", "bytesLoaded", "bytesTotal", "addEventListener", "load", "close", "_stream", "_httpResponseEventBound", "complete", "onStreamOpen", "onStreamComplete", "onStreamProgress", "onStreamIOError", "onStreamHTTPStatus", "onStreamHTTPResponseStatus", "onStreamSecurityError"];
+    static instanceSymbols: string [] = ["data", "dataFormat", "bytesLoaded", "bytesTotal", "load", "close"];
     
     constructor (request: flash.net.URLRequest = null) {
       false && super(undefined);

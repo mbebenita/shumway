@@ -1,5 +1,5 @@
 /**
- * Copyright 2013 Mozilla Foundation
+ * Copyright 2014 Mozilla Foundation
  * 
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -147,6 +147,10 @@ module Shumway.AVM2.AS.flash.geom {
       this.greenOffset += second.greenOffset;
       this.blueOffset += second.blueOffset;
       this.alphaOffset += second.alphaOffset;
+    }
+
+    public preMultiply(second:ColorTransform): void {
+      this.concat(second); // ColorTransform is Commutative.
     }
 
     public copyFrom(sourceColorTransform: ColorTransform): void {
