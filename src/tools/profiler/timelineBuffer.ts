@@ -33,8 +33,8 @@ module Shumway.Tools.Profiler {
     static ENTER = 0 << 31;
     static LEAVE = 1 << 31;
 
-    static MAX_KINDID = 0xffff;
-    static MAX_DATAID = 0x7fff;
+    static MAX_KINDID = 0xfff;
+    static MAX_DATAID = 0x7ffff;
 
     private _depth: number;
     private _data: any [];
@@ -105,7 +105,7 @@ module Shumway.Tools.Profiler {
           dataId = TimelineBuffer.MAX_DATAID;
         }
       }
-      return type | (dataId << 16) | kindId;
+      return type | (dataId << 12) | kindId;
     }
 
     enter(name: string, data?: any, time?: number) {
@@ -154,7 +154,7 @@ module Shumway.Tools.Profiler {
       }
 
       this._marks.forEachInReverse(function (mark, i) {
-        var dataId = (mark >>> 16) & TimelineBuffer.MAX_DATAID;
+        var dataId = (mark >>> 12) & TimelineBuffer.MAX_DATAID;
         var data = datastore[dataId];
         var kindId = mark & TimelineBuffer.MAX_KINDID;
         var kind = kinds[kindId];
