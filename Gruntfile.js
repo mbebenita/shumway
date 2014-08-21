@@ -99,7 +99,7 @@ module.exports = function(grunt) {
       },
       gate: {
         cmd: 'utils/jsshell/js build/ts/shell.js -x -g ' + (grunt.option('verbose') ? '-v ' : '') +
-                                                           (grunt.option('tests') || 'test/unit/pass/*.js')
+                                                           (grunt.option('tests') || '`find test/unit/pass/ -name "*.js"`')
 //        cmd: 'node build/ts/shell.js -x -g -v test/unit/pass/*.js'
       },
       smoke_parse_database: {
