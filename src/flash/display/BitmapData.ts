@@ -380,7 +380,6 @@ module Shumway.AVM2.AS.flash.display {
                alphaPoint: flash.geom.Point = null,
                mergeAlpha: boolean = false): void
     {
-      enterTimeline("BitmapData.copyPixels");
       mergeAlpha = !!mergeAlpha;
 
       if (alphaBitmapData || alphaPoint) {
@@ -399,7 +398,6 @@ module Shumway.AVM2.AS.flash.display {
 
       // Clipped source rect is empty so there's nothing to do.
       if (sR.isEmpty()) {
-        leaveTimeline();
         return;
       }
 
@@ -424,8 +422,24 @@ module Shumway.AVM2.AS.flash.display {
       var tX = tR.x;
       var tY = tR.y;
 
+      // Clipped target rect is empty so there's nothing to do.
+      if (tR.isEmpty()) {
+        return;
+      }
+
+      var timelineData = {
+        mergeAlpha: mergeAlpha,
+        w: 0,
+        h: 0
+      };
+
+      enterTimeline("BitmapData.copyPixels", timelineData);
+
       var tW = tR.width;
       var tH = tR.height;
+
+      timelineData.w = tW;
+      timelineData.h = tH;
 
       var sStride = sourceBitmapData._rect.width;
       var tStride = this._rect.width;
@@ -439,6 +453,7 @@ module Shumway.AVM2.AS.flash.display {
 
       if (mergeAlpha && this._type !== ImageType.PremultipliedAlphaARGB) {
         notImplemented("public flash.display.BitmapData::copyPixels - Merge Alpha");
+        leaveTimeline();
         return;
       }
 
@@ -486,7 +501,6 @@ module Shumway.AVM2.AS.flash.display {
       }
 
       this._invalidate();
-      somewhatImplemented("public flash.display.BitmapData::copyPixels");
       leaveTimeline();
     }
 
