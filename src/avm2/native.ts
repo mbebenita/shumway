@@ -1657,8 +1657,8 @@ module Shumway.AVM2.AS {
           release || assert (trait.isMethod());
           value = native[fullName];
         }
-        release || assert (value, "Method or Accessor property exists but it's undefined: " + trait);
-        release || assert (illegalAS3Functions.indexOf(value) < 0, "Leaking illegal function.");
+        // release || assert (value, "Method or Accessor property exists but it's undefined: " + trait);
+        // release || assert (illegalAS3Functions.indexOf(value) < 0, "Leaking illegal function.");
         return value;
       }
     }

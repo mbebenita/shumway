@@ -472,6 +472,12 @@ module Shumway.AVM2.Compiler.Backend {
       return call(property(object, "asGetResolvedStringProperty"), [compileValue(this.name, cx)]);
     }
     var name = compileMultiname(this.name, cx);
+    if (IR.isConstant(this.name.name)) {
+      var nameConstant = <IR.Constant>this.name.name;
+      if (!Shumway.isNumeric(nameConstant.value)) {
+        return call(property(object, "asGetNonNumericProperty"), name);
+      }
+    }
     var isMethod = new Literal(this.flags & IR.Flags.IS_METHOD);
     return call(property(object, "asGetProperty"), name.concat(isMethod));
   }
@@ -606,6 +612,12 @@ module Shumway.AVM2.Compiler.Backend {
       return call(property(object, "asSetNumericProperty"), [compileValue(this.name.name, cx), value]);
     }
     var name = compileMultiname(this.name, cx);
+    if (IR.isConstant(this.name.name)) {
+      var nameConstant = <IR.Constant>this.name.name;
+      if (!Shumway.isNumeric(nameConstant.value)) {
+        return call(property(object, "asSetNonNumericProperty"), name.concat(value));
+      }
+    }
     return call(property(object, "asSetProperty"), name.concat(value));
   }
 
@@ -681,7 +693,7 @@ module Shumway.AVM2.Compiler.Backend {
       var value = compileValue(property.value, cx);
       return new Property(key, value, "init");
     });
-    return new ObjectExpression(properties);
+    return call(id("createObject"), [new ObjectExpression(properties)]);
   }
 
   IR.ASNewActivation.prototype.compile = function (cx: Context): Compiler.AST.Node {

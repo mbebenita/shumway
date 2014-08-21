@@ -386,7 +386,7 @@ module Shumway.GFX {
 
   // Polyfill |Path2D| if it is not defined or if its |addPath| method doesn't exist. This means that we
   // always need to polyfill this in FF until addPath lands which sucks.
-  if (typeof CanvasRenderingContext2D !== 'undefined' && (typeof Path2D === 'undefined' || !Path2D.prototype.addPath)) {
+  if (typeof CanvasRenderingContext2D !== 'undefined' && ((typeof Path2D === 'undefined' || !Path2D.prototype.addPath))) {
     /**
      * We override all methods of |CanvasRenderingContext2D| that accept a |Path2D| object as one
      * of its arguments, so that we can apply all recorded drawing commands before calling the

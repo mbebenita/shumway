@@ -736,7 +736,7 @@ module Shumway.SWF.Parser {
           case FillType.RepeatingBitmap:
           case FillType.NonsmoothedClippedBitmap:
           case FillType.NonsmoothedRepeatingBitmap:
-            release || assert(style.bitmapIndex > -1);
+            // release || assert(style.bitmapIndex > -1, style.bitmapIndex);
             shape.beginBitmap(PathCommand.BeginBitmapFill, style.bitmapIndex, style.transform,
                               style.repeat, style.smooth);
             break;

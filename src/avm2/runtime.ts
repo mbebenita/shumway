@@ -22,11 +22,15 @@ import Namespace = Shumway.AVM2.ABC.Namespace;
 interface IProtocol {
   asGetProperty: (namespaces: Namespace [], name: any, flags: number) => any;
   asGetNumericProperty: (name: number) => any;
+  asGetNonNumericProperty: (namespaces: Namespace [], name: any, flags: number) => any;
   asGetPublicProperty: (name: any) => any;
   asGetResolvedStringProperty: (name: string) => any;
+
   asSetProperty: (namespaces: Namespace [], name: any, flags: number, value: any) => void;
   asSetNumericProperty: (name: number, value: any) => void;
+  asSetNonNumericProperty: (namespaces: Namespace [], name: any, flags: number, value: any) => void;
   asSetPublicProperty: (name: any, value: any) => void;
+
   asDefineProperty: (namespaces: Namespace [], name: any, flags: number, descriptor: PropertyDescriptor) => void;
   asDefinePublicProperty: (name: any, descriptor: PropertyDescriptor) => void;
   asCallProperty: (namespaces: Namespace [], name: any, flags: number, isLex: boolean, args: any []) => any;
@@ -306,10 +310,15 @@ module Shumway.AVM2.Runtime {
    * - asCallProperty(namespaces, name, flags, isLex, args)
    * - asDeleteProperty(namespaces, name, flags)
    *
-   * If the compiler can prove that the property name is numeric, it calls these functions instead.
+   * If the compiler can prove that the property name is numeric, it calls these:
    *
    * - asGetNumericProperty(index)
    * - asSetNumericProperty(index, value)
+   *
+   * If the compiler can prove that the property name is not numeric, it calls these:
+   *
+   * - asGetNonNumericProperty(namespaces, name, flags)
+   * - asSetNonNumericProperty(namespaces, name, flags, value)
    *
    * - asGetDescendants(namespaces, name, flags)
    * - asNextName(index)
@@ -458,7 +467,7 @@ module Shumway.AVM2.Runtime {
       defineNonEnumerableProperty(self, "original_valueOf", self.valueOf);
       self.valueOf = forwardValueOf;
     } else if (resolved === Multiname.TO_STRING) {
-      defineNonEnumerableProperty(self, "toString", self.toString);
+      defineNonEnumerableProperty(self, "original_toString", self.toString);
       self.toString = forwardToString;
     }
   }
@@ -1027,9 +1036,11 @@ module Shumway.AVM2.Runtime {
     defineNonEnumerableProperty(global.Object.prototype, "getNamespaceResolutionMap", getNamespaceResolutionMap);
     defineNonEnumerableProperty(global.Object.prototype, "resolveMultinameProperty", resolveMultinameProperty);
     defineNonEnumerableProperty(global.Object.prototype, "asGetProperty", asGetProperty);
+    defineNonEnumerableProperty(global.Object.prototype, "asGetNonNumericProperty", asGetProperty);
     defineNonEnumerableProperty(global.Object.prototype, "asGetPublicProperty", asGetPublicProperty);
     defineNonEnumerableProperty(global.Object.prototype, "asGetResolvedStringProperty", asGetResolvedStringProperty);
     defineNonEnumerableProperty(global.Object.prototype, "asSetProperty", asSetProperty);
+    defineNonEnumerableProperty(global.Object.prototype, "asSetNonNumericProperty", asSetProperty);
     defineNonEnumerableProperty(global.Object.prototype, "asSetPublicProperty", asSetPublicProperty);
     defineNonEnumerableProperty(global.Object.prototype, "asDefineProperty", asDefineProperty);
     defineNonEnumerableProperty(global.Object.prototype, "asDefinePublicProperty", asDefinePublicProperty);
@@ -1069,13 +1080,13 @@ module Shumway.AVM2.Runtime {
       "Float32Array",
       "Float64Array"
     ].forEach(function (name) {
-        if (!(name in global)) {
-          log(name + ' was not found in globals');
-          return;
-        }
-        defineNonEnumerableProperty(global[name].prototype, "asGetNumericProperty", asGetNumericProperty);
-        defineNonEnumerableProperty(global[name].prototype, "asSetNumericProperty", asSetNumericProperty);
-      });
+      if (!(name in global)) {
+        log(name + ' was not found in globals');
+        return;
+      }
+      defineNonEnumerableProperty(global[name].prototype, "asGetNumericProperty", asGetNumericProperty);
+      defineNonEnumerableProperty(global[name].prototype, "asSetNumericProperty", asSetNumericProperty);
+    });
 
     global.Array.prototype.asGetProperty = function (namespaces: Namespace [], name: any, flags: number): any {
       if (typeof name === "number") {
@@ -1228,6 +1239,24 @@ module Shumway.AVM2.Runtime {
 
   export function asCreateActivation(methodInfo: MethodInfo): Object {
     return Object.create(methodInfo.activationPrototype);
+  }
+
+  export class DynamicObject {
+    asGetNonNumericProperty(namespaces: Namespace [], name: any, flags: number) {
+      // var resolved = Multiname.qualifyName(Namespace.PUBLIC, name);
+      var resolved = "$Bg" + name;
+      return this[resolved];
+    }
+    asSetNonNumericProperty(namespaces: Namespace [], name: any, flags: number, value: any) {
+      // var resolved = Multiname.qualifyName(Namespace.PUBLIC, name);
+      var resolved = "$Bg" + name;
+      this[resolved] = value;
+    }
+    public static create(object: Object) {
+      // (<any>Object).setPrototypeOf(object, DynamicObject.prototype);
+      object.__proto__ = DynamicObject.prototype;
+      return object;
+    }
   }
 
   /**
@@ -1769,6 +1798,10 @@ module Shumway.AVM2.Runtime {
   export function createName(namespaces: Namespace [], name: any) {
     return new Multiname(namespaces, name);
   }
+
+  export function createObject(namespaces: Namespace [], name: any) {
+    return new Multiname(namespaces, name);
+  }
 }
 
 import CC = Shumway.AVM2.Runtime.CODE_CACHE;
@@ -1806,3 +1839,4 @@ var sliceArguments = Shumway.AVM2.Runtime.sliceArguments;
 
 var createFunction = Shumway.AVM2.Runtime.createFunction;
 var createName = Shumway.AVM2.Runtime.createName;
+var createObject = Shumway.AVM2.Runtime.DynamicObject.create;

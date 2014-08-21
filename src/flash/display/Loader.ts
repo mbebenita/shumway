@@ -81,7 +81,7 @@ module Shumway.AVM2.AS.flash.display {
     // List of instance symbols to link.
     static instanceSymbols: string [] = ["load!"]; // ["uncaughtErrorEvents", "addChild", "addChildAt", "removeChild", "removeChildAt", "setChildIndex", "load", "sanitizeContext", "loadBytes", "close", "unload", "unloadAndStop", "cloneObject"];
 
-    static WORKERS_ENABLED = typeof Worker !== 'undefined';
+    static WORKERS_ENABLED = false && typeof Worker !== 'undefined';
     static LOADER_PATH = 'swf/worker.js';
 
     /**

@@ -439,11 +439,15 @@ module Shumway.AVM2.AS.flash.display {
       var child1 = children[index1];
       var child2 = children[index2];
       children[index2] = child1;
-      child1._depth = -1;
-      child1._index = index2;
+      if (child1) {
+        child1._depth = -1;
+        child1._index = index2;
+      }
       children[index1] = child2;
-      child2._depth = -1;
-      child2._index = index1;
+      if (child2) {
+        child2._depth = -1;
+        child2._index = index1;
+      }
     }
 
     swapChildren(child1: DisplayObject, child2: DisplayObject): void {
