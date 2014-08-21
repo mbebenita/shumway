@@ -148,7 +148,8 @@ module Shumway.Remoting.GFX {
         updateFrame: 0,
         updateStage: 0,
         registerFont: 0,
-        drawToBitmap: 0
+        drawToBitmap: 0,
+        requestBitmapData: 0
       };
       Shumway.GFX.enterTimeline("GFXChannelDeserializer.read", data);
       while (input.bytesAvailable > 0) {
@@ -186,7 +187,7 @@ module Shumway.Remoting.GFX {
             this._readDrawToBitmap();
             break;
           case MessageTag.RequestBitmapData:
-            data.drawToBitmap ++;
+            data.requestBitmapData ++;
             this._readRequestBitmapData();
             break;
           default:
