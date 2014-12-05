@@ -447,7 +447,6 @@ module Shumway.AVM2.AS.flash.display {
         instance = symbolClass.initializeFrom(symbol);
       }
       instance._setFlags(DisplayObjectFlags.AnimatedByTimeline);
-      instance._setFlags(DisplayObjectFlags.OwnedByTimeline);
       instance._animate(state);
       if (callConstructor) {
         symbolClass.instanceConstructorNoInitialize.call(instance);
@@ -567,7 +566,7 @@ module Shumway.AVM2.AS.flash.display {
       var oldParent = this._parent;
       release || assert(parent !== this);
       this._parent = parent;
-      this._depth = depth;
+      this._setDepth(depth);
       if (parent) {
         this._addReference();
         var bubblingFlags = DisplayObjectFlags.None;
@@ -584,6 +583,15 @@ module Shumway.AVM2.AS.flash.display {
       if (oldParent) {
         this._removeReference();
       }
+    }
+
+    _setDepth(value: number) {
+      if (value > -1) {
+        this._setFlags(DisplayObjectFlags.OwnedByTimeline);
+      } else {
+        this._removeFlags(DisplayObjectFlags.OwnedByTimeline);
+      }
+      this._depth = value;
     }
 
     _setFillAndLineBoundsFromWidthAndHeight(width: number, height: number) {
@@ -1025,7 +1033,6 @@ module Shumway.AVM2.AS.flash.display {
      * property of this object is changed by user code.
      */
     private _stopTimelineAnimation() {
-      this._removeFlags(DisplayObjectFlags.OwnedByTimeline);
       this._removeFlags(DisplayObjectFlags.AnimatedByTimeline);
     }
 
