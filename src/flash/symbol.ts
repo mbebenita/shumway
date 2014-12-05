@@ -128,7 +128,7 @@ module Shumway.Timeline {
       }
       var symbol = this.symbol;
       if (symbol) {
-        if (symbol.dynamic) {
+        if (obj._symbol !== symbol && symbol.dynamic) {
           return false;
         }
         if (obj._clipDepth !== this.clipDepth) {
