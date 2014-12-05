@@ -494,9 +494,9 @@ module Shumway.AVM2.AS.flash.display {
           for (var i = 0; i < children.length; i++) {
             var child = children[i];
             var childDepth = child._depth;
-            if (childDepth) {
+            if (childDepth > -1) {
               // We need to scan all past states to check if we can keep the child.
-              var state: Timeline.AnimationState;
+              var state: Timeline.AnimationState = null;
               for (var j = nextFrame - 1; j >= 0 && !state; j--) {
                 state = frames[j].stateAtDepth[childDepth];
               }
