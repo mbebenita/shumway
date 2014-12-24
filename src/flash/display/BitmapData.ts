@@ -294,6 +294,7 @@ module Shumway.AVM2.AS.flash.display {
       // This should be coping the buffer not the view.
       var bd = new BitmapData(this._rect.width, this._rect.height, this._transparent,
                               this._solidFillColorPBGRA);
+      this._ensureBitmapData();
       bd._view.set(this._view);
       return bd;
     }
