@@ -566,6 +566,9 @@ module Shumway.AVM2.AS.flash.display {
     }
 
     dispose(): void {
+      if (this._symbol) {
+        return;
+      }
       this._rect.setEmpty();
       this._view = null;
       this._invalidate();
