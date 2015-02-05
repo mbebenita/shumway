@@ -28,6 +28,7 @@ module Shumway.AVM2.Compiler {
   import escapeString = Shumway.AVM2.Compiler.AST.escapeString;
 
   var writer = Compiler.baselineDebugLevel.value > 0 ? new IndentingWriter() : null;
+  var writer = new IndentingWriter();
 
   declare var Relooper;
 
@@ -153,10 +154,22 @@ module Shumway.AVM2.Compiler {
       var start = performance.now();
       release || writer && writer.writeLn("Compiling: " + compileCount + " " + this.methodInfo);
 
-      var analysis = this.methodInfo.analysis || new Analysis(this.methodInfo);
+      var analysis = this.methodInfo.analysis || (this.methodInfo.analysis = new Analysis(this.methodInfo));
       if (!analysis.analyzedControlFlow) {
         analysis.analyzeControlFlow();
       }
+
+      var registry: Shumway.AVM2.Verifier.Registry = {
+        findClassInfo: findClassInfo,
+        findDefiningScript: function(mn: Multiname, execute?: boolean) {
+          return null;
+        }
+      };
+
+      if (!hasExceptions) {
+        Shumway.AVM2.Verifier.Verifier.verifyMethod2(this.methodInfo, registry);
+      }
+
       this.methodInfo.classScope = this.scope;
 
       var blocks = this.blocks = analysis.blocks;
@@ -485,7 +498,7 @@ module Shumway.AVM2.Compiler {
           this.emitSetSuper(bc.index);
           break;
         case OP.getproperty:
-          this.emitGetProperty(bc.index);
+          this.emitGetProperty(bc);
           break;
         case OP.getsuper:
           this.emitGetSuper(bc.index);
@@ -889,7 +902,11 @@ module Shumway.AVM2.Compiler {
       }
     }
 
-    emitGetProperty(nameIndex: number) {
+    emitGetProperty(bc: Bytecode) {
+      var nameIndex = bc.index;
+      if (bc.ti && bc.ti.trait) {
+        writer.writeLn("GET: " + bc.ti.trait);
+      }
       var multiname = this.constantPool.multinames[nameIndex];
       // TODO: re-enable after XML and XMLList are able to handle this.
       if (false && multiname.isSimpleStatic()) {
@@ -1005,7 +1022,7 @@ module Shumway.AVM2.Compiler {
 
     emitConstructProperty(bc: Bytecode) {
       var args = this.popArgs(bc.argCount);
-      this.emitGetProperty(bc.index);
+      this.emitGetProperty(bc);
       var val = this.peek();
       this.blockEmitter.writeLn(val + ' = new ' + val + '.instanceConstructor(' + args + ');');
     }

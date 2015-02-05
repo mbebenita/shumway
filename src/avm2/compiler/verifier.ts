@@ -37,6 +37,11 @@ module Shumway.AVM2.Verifier {
     }
   }
 
+  export interface Registry {
+    findClassInfo(mn: Multiname): ClassInfo;
+    findDefiningScript(mn: Multiname, execute?: boolean): any;
+  }
+
   export class TypeInformation {
     type: Type = null;
     baseClass: any = null;
@@ -73,20 +78,20 @@ module Shumway.AVM2.Verifier {
       byHash: <Shumway.Map<Type>>Object.create(null)
     };
 
-    static from(info: Info, domain: ApplicationDomain): Type {
+    static from(info: Info, registry: Registry): Type {
       release || assert (info.hash);
       var type = Type._cache[info.hash];
       if (!type) {
-        type = Type._cache[info.hash] = new TraitsType(info, domain);
+        type = Type._cache[info.hash] = new TraitsType(info, registry);
       }
       return type;
     }
 
-    static fromSimpleName(name: string, domain: ApplicationDomain): TraitsType {
-      return <TraitsType>Type.fromName(Multiname.fromSimpleName(name), domain);
+    static fromSimpleName(name: string, registry: Registry): TraitsType {
+      return <TraitsType>Type.fromName(Multiname.fromSimpleName(name), registry);
     }
 
-    static fromName(mn: Multiname, domain: ApplicationDomain): Type {
+    static fromName(mn: Multiname, registry: Registry): Type {
       if (mn === undefined) {
         return Type.Undefined;
       } else {
@@ -100,11 +105,11 @@ module Shumway.AVM2.Verifier {
         if (qn === Multiname.getPublicQualifiedName("void")) {
           return Type.Void;
         }
-        release || assert(domain, "An ApplicationDomain is needed.");
-        var info = domain.findClassInfo(mn);
-        var type = info ? Type.from(info, domain) : Type.Any;
+        release || assert(registry, "An Registry is needed.");
+        var info = registry.findClassInfo(mn);
+        var type = info ? Type.from(info, registry) : Type.Any;
         if (mn.hasTypeParameter()) {
-          type = new ParameterizedType(<TraitsType>type, Type.fromName(mn.typeParameter, domain));
+          type = new ParameterizedType(<TraitsType>type, Type.fromName(mn.typeParameter, registry));
         }
         return Type._cache.byQN[qn] = type;
       }
@@ -112,7 +117,7 @@ module Shumway.AVM2.Verifier {
     }
 
     private static _typesInitialized = false;
-    public static initializeTypes(domain: ApplicationDomain) {
+    public static initializeTypes(registry: Registry) {
       if (Type._typesInitialized) {
         return;
       }
@@ -121,20 +126,20 @@ module Shumway.AVM2.Verifier {
       Type.Void         = new AtomType("Void", "V");
       Type.Undefined    = new AtomType("Undefined", "_");
 
-      Type.Int          = Type.fromSimpleName("int", domain).instanceType();
-      Type.Uint         = Type.fromSimpleName("uint", domain).instanceType();
-      Type.Class        = Type.fromSimpleName("Class", domain).instanceType();
-      Type.Array        = Type.fromSimpleName("Array", domain).instanceType();
-      Type.Object       = Type.fromSimpleName("Object", domain).instanceType();
-      Type.String       = Type.fromSimpleName("String", domain).instanceType();
-      Type.Number       = Type.fromSimpleName("Number", domain).instanceType();
-      Type.Boolean      = Type.fromSimpleName("Boolean", domain).instanceType();
-      Type.Function     = Type.fromSimpleName("Function", domain).instanceType();
-      Type.XML          = Type.fromSimpleName("XML", domain).instanceType();
-      Type.XMLList      = Type.fromSimpleName("XMLList", domain).instanceType();
-      Type.QName        = Type.fromSimpleName("QName", domain).instanceType();
-      Type.Namespace    = Type.fromSimpleName("Namespace", domain).instanceType();
-      Type.Dictionary   = Type.fromSimpleName("flash.utils.Dictionary", domain).instanceType();
+      Type.Int          = Type.fromSimpleName("int", registry).instanceType();
+      Type.Uint         = Type.fromSimpleName("uint", registry).instanceType();
+      Type.Class        = Type.fromSimpleName("Class", registry).instanceType();
+      Type.Array        = Type.fromSimpleName("Array", registry).instanceType();
+      Type.Object       = Type.fromSimpleName("Object", registry).instanceType();
+      Type.String       = Type.fromSimpleName("String", registry).instanceType();
+      Type.Number       = Type.fromSimpleName("Number", registry).instanceType();
+      Type.Boolean      = Type.fromSimpleName("Boolean", registry).instanceType();
+      Type.Function     = Type.fromSimpleName("Function", registry).instanceType();
+      Type.XML          = Type.fromSimpleName("XML", registry).instanceType();
+      Type.XMLList      = Type.fromSimpleName("XMLList", registry).instanceType();
+      Type.QName        = Type.fromSimpleName("QName", registry).instanceType();
+      Type.Namespace    = Type.fromSimpleName("Namespace", registry).instanceType();
+      Type.Dictionary   = Type.fromSimpleName("flash.utils.Dictionary", registry).instanceType();
       Type._typesInitialized = true;
     }
 
@@ -273,20 +278,20 @@ module Shumway.AVM2.Verifier {
 
   export class TraitsType extends Type {
     _cachedType: Type;
-    constructor(public info: Info, public domain: ApplicationDomain) {
+    constructor(public info: Info, public registry: Registry) {
       super();
     }
 
     instanceType(): TraitsType {
       release || assert(this.info instanceof ClassInfo);
       var classInfo = <ClassInfo>this.info;
-      return <TraitsType>(this._cachedType || (this._cachedType = <TraitsType>Type.from(classInfo.instanceInfo, this.domain)));
+      return <TraitsType>(this._cachedType || (this._cachedType = <TraitsType>Type.from(classInfo.instanceInfo, this.registry)));
     }
 
     classType(): TraitsType {
       release || assert(this.info instanceof InstanceInfo);
       var instanceInfo = <InstanceInfo>this.info;
-      return <TraitsType>(this._cachedType || (this._cachedType = <TraitsType>Type.from(instanceInfo.classInfo, this.domain)));
+      return <TraitsType>(this._cachedType || (this._cachedType = <TraitsType>Type.from(instanceInfo.classInfo, this.registry)));
     }
 
     super(): TraitsType {
@@ -296,7 +301,7 @@ module Shumway.AVM2.Verifier {
       release || assert(this.info instanceof InstanceInfo);
       var instanceInfo = <InstanceInfo>this.info;
       if (instanceInfo.superName) {
-        var result = <TraitsType>Type.fromName(instanceInfo.superName, this.domain).instanceType();
+        var result = <TraitsType>Type.fromName(instanceInfo.superName, this.registry).instanceType();
         release || assert(result instanceof TraitsType && result.info instanceof InstanceInfo);
         return result;
       }
@@ -457,14 +462,14 @@ module Shumway.AVM2.Verifier {
   }
 
   export class MethodType extends TraitsType {
-    constructor(public methodInfo: MethodInfo, domain: ApplicationDomain) {
-      super(Type.Function.info, domain);
+    constructor(public methodInfo: MethodInfo, registry: Registry) {
+      super(Type.Function.info, registry);
     }
     toString(): string {
       return "MT " + this.methodInfo;
     }
     returnType(): Type {
-      return this._cachedType || (this._cachedType = Type.fromName(this.methodInfo.returnType, this.domain));
+      return this._cachedType || (this._cachedType = Type.fromName(this.methodInfo.returnType, this.registry));
     }
   }
 
@@ -479,7 +484,7 @@ module Shumway.AVM2.Verifier {
 
   export class ParameterizedType extends TraitsType {
     constructor(public type: TraitsType, public parameter: Type) {
-      super(type.info, type.domain);
+      super(type.info, type.registry);
     }
   }
 
@@ -593,11 +598,11 @@ module Shumway.AVM2.Verifier {
     pushAnyCount: number = 0;
     constructor (
       public methodInfo: MethodInfo,
-      public domain: ApplicationDomain,
+      public registry: Registry,
       public savedScope: Type []
     ) {
       // ...
-      Type.initializeTypes(domain);
+      Type.initializeTypes(registry);
 
       if (Shumway.AVM2.Verifier.traceLevel.value) {
         this.writer = new IndentingWriter();
@@ -609,7 +614,7 @@ module Shumway.AVM2.Verifier {
     verify() {
       var methodInfo = this.methodInfo;
       if (this.writer) {
-        this.methodInfo.trace(this.writer);
+        // this.methodInfo.trace(this.writer);
       }
       release || assert(methodInfo.localCount >= methodInfo.parameters.length + 1);
       this._verifyBlocks(this._prepareEntryState());
@@ -618,13 +623,13 @@ module Shumway.AVM2.Verifier {
     private _prepareEntryState(): State {
       var entryState = new State();
       var methodInfo = this.methodInfo;
-      this.thisType = methodInfo.holder ? Type.from(methodInfo.holder, this.domain) : Type.Any;
+      this.thisType = methodInfo.holder ? Type.from(methodInfo.holder, this.registry) : Type.Any;
       entryState.local.push(this.thisType);
 
       // Initialize entry state with parameter types.
       var parameters = methodInfo.parameters;
       for (var i = 0; i < parameters.length; i++) {
-        entryState.local.push(Type.fromName(parameters[i].type, this.domain).instanceType());
+        entryState.local.push(Type.fromName(parameters[i].type, this.registry).instanceType());
       }
 
       // Push the |rest| or |arguments| array type in the locals.
@@ -661,6 +666,7 @@ module Shumway.AVM2.Verifier {
        */
       for (var i = 0; i < blocks.length; i++) {
         blocks[i].bdo = i;
+        blocks[i].verifierEntryState = null;
       }
 
       /**
@@ -799,13 +805,13 @@ module Shumway.AVM2.Verifier {
             writer && writer.debugLn("getProperty(" + mn + ") -> " + trait);
             ti().trait = trait;
             if (trait.isSlot() || trait.isConst()) {
-              return Type.fromName(trait.typeName, self.domain).instanceType();
+              return Type.fromName(trait.typeName, self.registry).instanceType();
             } else if (trait.isGetter()) {
-              return Type.fromName(trait.methodInfo.returnType, self.domain).instanceType();
+              return Type.fromName(trait.methodInfo.returnType, self.registry).instanceType();
             } else if (trait.isClass()) {
-              return Type.from(trait.classInfo, self.domain);
+              return Type.from(trait.classInfo, self.registry);
             } else if (trait.isMethod()) {
-              return new MethodType(trait.methodInfo, self.domain)
+              return new MethodType(trait.methodInfo, self.registry)
             }
           } else if (isNumericMultiname(mn) && traitsType.isParameterizedType()) {
             var parameter = traitsType.asParameterizedType().parameter;
@@ -868,10 +874,10 @@ module Shumway.AVM2.Verifier {
           }
         }
 
-        var resolved = self.domain.findDefiningScript(mn.getConstantValue(), false);
+        var resolved = self.registry.findDefiningScript(mn.getConstantValue(), false);
         if (resolved) {
           ti().object = Runtime.LazyInitializer.create(resolved.script);
-          var type = Type.from(resolved.script, self.domain);
+          var type = Type.from(resolved.script, self.registry);
           writer && writer.debugLn("findProperty(" + mn + ") -> " + type);
           return type;
         }
@@ -894,9 +900,9 @@ module Shumway.AVM2.Verifier {
           if (trait) {
             ti().trait = trait;
             if (trait.isSlot()) {
-              return Type.fromName(trait.typeName, self.domain).instanceType();
+              return Type.fromName(trait.typeName, self.registry).instanceType();
             } else if (trait.isClass()) {
-              return Type.from(trait.classInfo, self.domain);
+              return Type.from(trait.classInfo, self.registry);
             }
           }
         }
@@ -1137,7 +1143,7 @@ module Shumway.AVM2.Verifier {
           case OP.returnvalue:
             type = pop();
             if (methodInfo.returnType) {
-              var coerceType = Type.fromName(methodInfo.returnType, this.domain).instanceType();
+              var coerceType = Type.fromName(methodInfo.returnType, this.registry).instanceType();
               if (coerceType.isSubtypeOf(type)) {
                 ti().noCoercionNeeded = true;
               }
@@ -1194,7 +1200,7 @@ module Shumway.AVM2.Verifier {
             push(Type.Array);
             break;
           case OP.newactivation:
-            push(Type.from(this.methodInfo, this.domain));
+            push(Type.from(this.methodInfo, this.registry));
             break;
           case OP.newclass:
             // The newclass bytecode is not supported because it needs
@@ -1329,7 +1335,7 @@ module Shumway.AVM2.Verifier {
           case OP.coerce:
             // print("<<< " + multinames[bc.index] + " >>>");
             type = pop();
-            var coerceType = Type.fromName(this.multinames[bc.index], this.domain).instanceType();
+            var coerceType = Type.fromName(this.multinames[bc.index], this.registry).instanceType();
             if (coerceType.isSubtypeOf(type)) {
               ti().noCoercionNeeded = true;
             }
@@ -1344,7 +1350,7 @@ module Shumway.AVM2.Verifier {
             break;
           case OP.astype:
             type = pop();
-            var asType = Type.fromName(this.multinames[bc.index], this.domain).instanceType();
+            var asType = Type.fromName(this.multinames[bc.index], this.registry).instanceType();
             if (asType.isSubtypeOf(type)) {
               ti().noCoercionNeeded = true;
             }
@@ -1482,32 +1488,37 @@ module Shumway.AVM2.Verifier {
   }
 
   export class Verifier {
-    private _prepareScopeObjects(methodInfo: MethodInfo, scope: Scope): Type [] {
-      var domain = methodInfo.abc.applicationDomain;
-      var scopeObjects = scope.getScopeObjects();
-      return scopeObjects.map(function (object) {
-        if (object instanceof Info) {
-          return Type.from(object, domain);
-        }
-        if (object instanceof Shumway.AVM2.Runtime.Global) {
-          return Type.from(object.scriptInfo, domain);
-        }
-        if (object instanceof Shumway.AVM2.AS.ASClass) {
-          return Type.from((<Shumway.AVM2.AS.ASClass>object).classInfo, domain);
-        }
-        if (object instanceof Shumway.AVM2.Runtime.ActivationInfo) {
-          return Type.from(object.methodInfo, domain);
-        }
-        if (object.class) {
-          return Type.from(object.class.classInfo.instanceInfo, domain);
-        }
-        release || assert (false, object.toString());
-        return Type.Any;
-      });
-    }
+    //private _prepareScopeObjects(methodInfo: MethodInfo, scope: Scope): Type [] {
+    //  var registry = methodInfo.abc.Registry;
+    //  var scopeObjects = scope.getScopeObjects();
+    //  return scopeObjects.map(function (object) {
+    //    if (object instanceof Info) {
+    //      return Type.from(object, registry);
+    //    }
+    //    if (object instanceof Shumway.AVM2.Runtime.Global) {
+    //      return Type.from(object.scriptInfo, registry);
+    //    }
+    //    if (object instanceof Shumway.AVM2.AS.ASClass) {
+    //      return Type.from((<Shumway.AVM2.AS.ASClass>object).classInfo, registry);
+    //    }
+    //    if (object instanceof Shumway.AVM2.Runtime.ActivationInfo) {
+    //      return Type.from(object.methodInfo, registry);
+    //    }
+    //    if (object.class) {
+    //      return Type.from(object.class.classInfo.instanceInfo, registry);
+    //    }
+    //    release || assert (false, object.toString());
+    //    return Type.Any;
+    //  });
+    //}
     verifyMethod(methodInfo: MethodInfo, scope: Scope) {
-      var scopeTypes = this._prepareScopeObjects(methodInfo, scope);
-      new Verification(methodInfo, methodInfo.abc.applicationDomain, scopeTypes).verify();
+      // var scopeTypes = this._prepareScopeObjects(methodInfo, scope);
+      // new Verification(methodInfo, methodInfo.abc.Registry, scopeTypes).verify();
+    }
+    public static verifyMethod2(methodInfo: MethodInfo, registry: Registry) {
+      // var scopeTypes = this._prepareScopeObjects(methodInfo, scope);
+      // new Verification(methodInfo, methodInfo.abc.Registry, scopeTypes).verify();
+      new Verification(methodInfo, registry, []).verify();
     }
   }
 }
