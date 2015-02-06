@@ -130,7 +130,7 @@ module Shumway.AVM2.Compiler {
     static stackNames = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"];
 
     constructor(public methodInfo: MethodInfo, private scope: Scope, private hasDynamicScope: boolean,
-                private globalMiName: string) {
+                private globalMiName: string, private applicationDomain: Runtime.ApplicationDomain) {
       this.constantPool = this.methodInfo.abc.constantPool;
     }
 
@@ -153,11 +153,17 @@ module Shumway.AVM2.Compiler {
       var start = performance.now();
       release || writer && writer.writeLn("Compiling: " + compileCount + " " + this.methodInfo);
 
-      var analysis = this.methodInfo.analysis || new Analysis(this.methodInfo);
+      var analysis = this.methodInfo.analysis || (this.methodInfo.analysis = new Analysis(this.methodInfo));
       if (!analysis.analyzedControlFlow) {
         analysis.analyzeControlFlow();
       }
       this.methodInfo.classScope = this.scope;
+
+      try {
+        Verifier.Verifier.verifyMethod(this.methodInfo, this.applicationDomain);
+      } catch (e) {
+
+      }
 
       var blocks = this.blocks = analysis.blocks;
       this.bytecodes = analysis.bytecodes;
@@ -1393,13 +1399,18 @@ module Shumway.AVM2.Compiler {
         return value;
     }
   }
+
+  var applicationDomain: ApplicationDomain;
+
   export function baselineCompileMethod(methodInfo: MethodInfo, scope: Scope,
-                                        hasDynamicScope: boolean, globalMiName: string) {
-    var compiler = new BaselineCompiler(methodInfo, scope, hasDynamicScope, globalMiName);
+                                        hasDynamicScope: boolean, globalMiName: string, applicationDomain) {
+
+    var compiler = new BaselineCompiler(methodInfo, scope, hasDynamicScope, globalMiName, applicationDomain);
     try {
       var result = compiler.compile();
     } catch (e) {
       failCompileCount++;
+      writer && writer.errorLn(e.stack);
       writer && writer.errorLn("Error: " + e);
     }
     return result;
@@ -1515,6 +1526,11 @@ module Shumway.AVM2.Compiler {
 
     libraries.push.apply(libraries, libs);
     libraries.push.apply(libraries, abcs);
+
+    applicationDomain = new Runtime.ApplicationDomain(null, null, Runtime.ExecutionMode.COMPILE, false);
+    for (var i = 0; i < libraries.length; i++) {
+      applicationDomain.loadAbc(libraries[i]);
+    }
 
     for (var j = 0; j < abcs.length; j++) {
       var abc = abcs[j];

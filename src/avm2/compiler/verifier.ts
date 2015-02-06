@@ -661,6 +661,7 @@ module Shumway.AVM2.Verifier {
        */
       for (var i = 0; i < blocks.length; i++) {
         blocks[i].bdo = i;
+        blocks[i].verifierEntryState = null;
       }
 
       /**
@@ -1508,6 +1509,9 @@ module Shumway.AVM2.Verifier {
     verifyMethod(methodInfo: MethodInfo, scope: Scope) {
       var scopeTypes = this._prepareScopeObjects(methodInfo, scope);
       new Verification(methodInfo, methodInfo.abc.applicationDomain, scopeTypes).verify();
+    }
+    static verifyMethod(methodInfo: MethodInfo, applicationDomain: ApplicationDomain) {
+      new Verification(methodInfo, applicationDomain, []).verify();
     }
   }
 }

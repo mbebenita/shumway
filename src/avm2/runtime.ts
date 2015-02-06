@@ -1537,7 +1537,7 @@ module Shumway.AVM2.Runtime {
     if (!cached) {
       if (Compiler.useBaseline.value) {
         enterTimeline('Baseline compile');
-        compilation = Compiler.baselineCompileMethod(mi, scope, hasDynamicScope, globalMiName);
+        compilation = Compiler.baselineCompileMethod(mi, scope, hasDynamicScope, globalMiName, mi.abc.applicationDomain);
         leaveTimeline();
       } else {
         compilation = Compiler.compileMethod(mi, scope, hasDynamicScope);
@@ -1626,7 +1626,12 @@ module Shumway.AVM2.Runtime {
       mi.freeMethod = createInterpretedFunction(mi, scope, hasDynamicScope);
     } else {
       compiledFunctionCount++;
-      mi.freeMethod = createCompiledFunction(mi, scope, hasDynamicScope, breakpoint, mi.isInstanceInitializer);
+      try {
+        mi.freeMethod = createCompiledFunction(mi, scope, hasDynamicScope, breakpoint, mi.isInstanceInitializer);
+      } catch (e) {
+        Shumway.Debug.warning("Cannot compile method: " + e);
+        mi.freeMethod = createInterpretedFunction(mi, scope, hasDynamicScope);
+      }
     }
 
     mi.freeMethod.methodInfo = mi;

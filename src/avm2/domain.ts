@@ -234,7 +234,7 @@ module Shumway.AVM2.Runtime {
     onMessage: Callback;
     system: any;
     constructor(vm: AVM2, base: ApplicationDomain, mode: ExecutionMode, allowNatives: boolean) {
-      release || assert (vm instanceof AVM2);
+      // release || assert (vm instanceof AVM2);
       release || assert (isNullOrUndefined(base) || base instanceof ApplicationDomain);
 
       this.vm = vm;
@@ -453,6 +453,10 @@ module Shumway.AVM2.Runtime {
             release || Shumway.Debug.unexpected();
           }
         }
+      }
+
+      if (!this.vm) {
+        return undefined;
       }
 
       // Ask host to execute the defining ABC
