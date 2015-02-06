@@ -941,23 +941,9 @@ module Shumway.AVM2.Compiler {
 
     emitCallProperty(bc: Bytecode) {
       var args = this.popArgs(bc.argCount);
+      var nameElements = this.emitMultiname(bc.index);
       var isLex = bc.op === OP.callproplex;
-      var nameElements;
-      if (isLex) {
-        nameElements = this.emitFindProperty(bc.index, true);
-      }
-      var call: string;
-      var multiname = this.constantPool.multinames[bc.index];
-      // TODO: re-enable after scope lookups for primitive natives are fixed.
-      if (false && multiname.isSimpleStatic()) {
-        var qualifiedName = Multiname.qualifyName(multiname.namespaces[0], multiname.name);
-        call = '.' + qualifiedName + '(' + args + ')';
-      } else {
-        if (!nameElements) {
-          nameElements = this.emitMultiname(bc.index);
-        }
-        call = ".asCallProperty(" + nameElements + ", " + isLex + ", [" + args + "])";
-      }
+      var call = ".asCallProperty(" + nameElements + ", " + isLex + ", [" + args + "])";
       if (bc.op !== OP.callpropvoid) {
         this.emitReplace(this.peek() + call);
       } else {
