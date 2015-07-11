@@ -70,25 +70,21 @@ module Shumway.AVMX {
     static Namespace: TraitsType;
     static Dictionary: TraitsType;
 
-    static _cache = {
-      byQN: <Shumway.MapObject<Type>>Object.create(null),
-    };
+    static byQN = Object.create(null);
+    static byInfo: Map<Info, Type> = new Map<Info, Type>();
 
     static from(info: Info, domain: AXApplicationDomain): Type {
-      // REDUX
-      //release || assert (info.hash);
-      //var type = Type._cache[info.hash];
-      //if (!type) {
-      //  type = Type._cache[info.hash] = new TraitsType(info, domain);
-      //}
-      //return type;
-      return null;
+      var type = Type.byInfo.get(info);
+      if (!type) {
+        Type.byInfo.set(info, type = new TraitsType(info, domain));
+      }
+      return type;
     }
 
     static fromSimpleName(name: string, domain: AXApplicationDomain): TraitsType {
-      // REDUX
-      return null;
-      // return <TraitsType>Type.fromName(Multiname.fromSimpleName(name), domain);
+      var info = domain.findClassInfo(name);
+      var type = info ? Type.from(info, domain) : Type.Any;
+      return <TraitsType>type;
     }
 
     static fromName(mn: Multiname, domain: AXApplicationDomain): Type {
@@ -119,6 +115,9 @@ module Shumway.AVMX {
     }
 
     private static _typesInitialized = false;
+
+    // TODO: We should differentiate between primitive types from different security
+    // domains.
     public static initializeTypes(domain: AXApplicationDomain) {
       if (Type._typesInitialized) {
         return;
@@ -442,19 +441,17 @@ module Shumway.AVMX {
     }
 
     private _getInfoName(): string {
-      // REDUX
-      return "REDUX";
-      //if (this.info instanceof ScriptInfo) {
-      //  return "SI";
-      //} else if (this.info instanceof ClassInfo) {
-      //  var classInfo = <ClassInfo>this.info;
-      //  return "CI:" + classInfo.instanceInfo.name.name;
-      //} else if (this.info instanceof InstanceInfo) {
-      //  var instanceInfo = <InstanceInfo>this.info;
-      //  return "II:" + instanceInfo.name.name;
-      //} else if (this.info instanceof MethodInfo) {
-      //  return "MI";
-      //}
+      if (this.info instanceof ScriptInfo) {
+        return "SI";
+      } else if (this.info instanceof ClassInfo) {
+        var classInfo = <ClassInfo>this.info;
+        return "CI:" + classInfo.instanceInfo.getClassName();
+      } else if (this.info instanceof InstanceInfo) {
+        var instanceInfo = <InstanceInfo>this.info;
+        return "II:" + instanceInfo.getClassName();
+      } else if (this.info instanceof MethodInfo) {
+        return "MI";
+      }
 //      else if (this.info instanceof ActivationInfo) {
 //        return "AC";
 //      }
@@ -610,7 +607,7 @@ module Shumway.AVMX {
   export class Verifier {
     stateMap: { [s: number]: State; } = [];
     constructor(private method: MethodInfo) {
-
+      Type.initializeTypes(method.abc.applicationDomain);
     }
 
     verify() {
@@ -640,25 +637,37 @@ module Shumway.AVMX {
        */
       while (!worklist.isEmpty()) {
         var block = worklist.pop();
-        writer.writeLn("Processing: " + BlockMap.blockToString(block));
-        var state = stateMap[block.blockID].clone();
-        writer.writeLn(state.toString());
+        if (writer) {
+          writer.writeLn("Processing: " + BlockMap.blockToString(block));
+        }
 
+        var state = stateMap[block.blockID].clone();
+
+        this.processBlock(block, state);
+
+        if (writer) {
+          writer.writeLn(state.toString());
+        }
         for (var i = 0; i < block.successors.length; i++) {
           var successor = block.successors[i];
           if (worklist.contains(successor)) {
             // If the successor is already in the worklist then just merge the current
             // state into its entry state.
             stateMap[successor.blockID].merge(state);
-            writer.writeLn("Merging: " + stateMap[successor.blockID] + " with " + state);
+            if (writer) {
+              writer.writeLn("Merging: " + stateMap[successor.blockID] + " with " + state);
+            }
             continue;
           } else if (stateMap[successor.blockID]) {
-            // If the successor's entry state is not a subset of the current state, then
-            // reprocess the block by adding it to the worklist.
+            // If the successor's entry state is not null then we must have processed it already.
             if (!stateMap[successor.blockID].isSubset(state)) {
+              // If the entry state is not a subset of the current state, then reprocess the block
+              // by adding it to the worklist.
               stateMap[successor.blockID].merge(state);
               worklist.push(successor);
-              writer.writeLn("Recalculating: " + stateMap[successor.blockID] + " with " + state);
+              if (writer) {
+                writer.writeLn("Recalculating: " + stateMap[successor.blockID] + " with " + state);
+              }
             }
             continue;
           }
@@ -666,6 +675,74 @@ module Shumway.AVMX {
           stateMap[successor.blockID] = state.clone();
           worklist.push(successor);
         }
+      }
+    }
+
+    processBlock(block: Block, state: State) {
+      var local = state.local;
+      var stack = state.stack;
+      var scope = state.scope;
+
+      function push(x: Type) {
+        release || assert(x);
+        // ti().type = x;
+        stack.push(x);
+      }
+
+      function pop(expectedType?: Type) {
+        return stack.pop();
+      }
+
+      if (writer) {
+        writer.indent();
+      }
+      var code = this.method.getBody().code;
+      var bci = block.startBci;
+      while (bci <= block.endBci) {
+        var bc: Bytecode = Bytes.u8(code, bci);
+        if (writer) {
+          writer.writeLn(Bytecode[bc].padRight(" ", 10) + ": " + state);
+        }
+        switch (bc) {
+          case Bytecode.PUSHBYTE:
+            push(Type.Int);
+            break;
+          case Bytecode.PUSHSTRING:
+            push(Type.String);
+            break;
+          case Bytecode.SETLOCAL0:
+          case Bytecode.SETLOCAL1:
+          case Bytecode.SETLOCAL2:
+          case Bytecode.SETLOCAL3:
+            local[bc - Bytecode.SETLOCAL0] = pop();
+            break;
+          case Bytecode.SETLOCAL:
+            local[Bytes.u30(code, bci + 1)] = pop();
+            break;
+          case Bytecode.COERCE_S:
+            pop();
+            push(Type.String);
+            break;
+          case Bytecode.COERCE_I:
+          case Bytecode.CONVERT_I:
+            pop();
+            push(Type.Int);
+            break;
+          case Bytecode.GETLOCAL:
+            push(local[Bytes.u30(code, bci + 1)]);
+            break;
+          case Bytecode.GETLOCAL0:
+          case Bytecode.GETLOCAL1:
+          case Bytecode.GETLOCAL2:
+          case Bytecode.GETLOCAL3:
+            push(local[bc - Bytecode.GETLOCAL0]);
+            break;
+          default:
+        }
+        bci += lengthAt(code, bci);
+      }
+      if (writer) {
+        writer.outdent();
       }
     }
   }
