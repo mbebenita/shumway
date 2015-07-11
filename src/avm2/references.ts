@@ -28,6 +28,7 @@
 ///<reference path='int.ts' />
 ///<reference path='run.ts' />
 ///<reference path='nat.ts' />
+///<reference path='ver.ts' />
 
 // ///<reference path='compiler/verifier.ts' />
 // ///<reference path='compiler/baseline.ts' />

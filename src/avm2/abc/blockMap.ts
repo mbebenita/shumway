@@ -495,7 +495,7 @@ module Shumway.AVMX {
       return loops;
     }
 
-    public blockToString(block: Block): string {
+    public static blockToString(block: Block): string {
       return "blockID: " + String(block.blockID +
       ", ").padRight(" ", 5) +
       "bci: [" + block.startBci + ", " + block.endBci + "]" +
@@ -515,7 +515,7 @@ module Shumway.AVMX {
 
       writer.enter("Block Map: " + this.blocks.map(b => b.blockID).join(", "));
       this.blocks.forEach(block => {
-        writer.enter(this.blockToString(block));
+        writer.enter(BlockMap.blockToString(block));
         if (traceBytecode) {
           var bci = block.startBci;
           stream.setBCI(bci);
