@@ -22,6 +22,7 @@
 
 ///<reference path='abc/stream.ts' />
 ///<reference path='abc/ops.ts' />
+///<reference path='abc/blockMap.ts' />
 ///<reference path='abc/lazy.ts' />
 
 ///<reference path='int.ts' />
