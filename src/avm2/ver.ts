@@ -25,8 +25,8 @@ module Shumway.AVMX {
   //import Info = Shumway.AVM2.ABC.Info;
   //import MethodInfo = Shumway.AVM2.ABC.MethodInfo;
   //import assert = Shumway.Debug.assert;
-  //import notImplemented = Shumway.Debug.notImplemented;
-  //import popManyIntoVoid = Shumway.ArrayUtilities.popManyIntoVoid;
+  import notImplemented = Shumway.Debug.notImplemented;
+  import popManyIntoVoid = Shumway.ArrayUtilities.popManyIntoVoid;
   //
   //import Scope = Shumway.AVM2.Runtime.Scope;
 
@@ -70,7 +70,7 @@ module Shumway.AVMX {
     static Namespace: TraitsType;
     static Dictionary: TraitsType;
 
-    static byQN = Object.create(null);
+    static byQN: { [s: string]: Type; } = Object.create(null);
     static byInfo: Map<Info, Type> = new Map<Info, Type>();
 
     static from(info: Info, domain: AXApplicationDomain): Type {
@@ -88,30 +88,29 @@ module Shumway.AVMX {
     }
 
     static fromName(mn: Multiname, domain: AXApplicationDomain): Type {
-      // REDUX
+      if (mn === undefined) {
+        return Type.Undefined;
+      } else {
+        var qn = mn.isQName() ? mn.getMangledName() : undefined;
+        if (qn) {
+          var type = Type.byQN[qn];
+          if (type) {
+            return type;
+          }
+        }
+        // REDUX
+        //if (qn === Multiname.getPublicQualifiedName("void")) {
+        //  return Type.Void;
+        //}
+        release || assert(domain, "An AXApplicationDomain is needed.");
+        var info = domain.findClassInfo(mn.name);
+        var type = info ? Type.from(info, domain) : Type.Any;
+        if (mn.parameterType) {
+          type = new ParameterizedType(<TraitsType>type, Type.fromName(mn.parameterType, domain));
+        }
+        return Type.byQN[qn] = type;
+      }
       return null;
-      //if (mn === undefined) {
-      //  return Type.Undefined;
-      //} else {
-      //  var qn = Multiname.isQName(mn) ? Multiname.getFullQualifiedName(mn) : undefined;
-      //  if (qn) {
-      //    var type = Type._cache.byQN[qn];
-      //    if (type) {
-      //      return type;
-      //    }
-      //  }
-      //  if (qn === Multiname.getPublicQualifiedName("void")) {
-      //    return Type.Void;
-      //  }
-      //  release || assert(domain, "An AXApplicationDomain is needed.");
-      //  var info = domain.findClassInfo(mn);
-      //  var type = info ? Type.from(info, domain) : Type.Any;
-      //  if (mn.hasTypeParameter()) {
-      //    type = new ParameterizedType(<TraitsType>type, Type.fromName(mn.typeParameter, domain));
-      //  }
-      //  return Type._cache.byQN[qn] = type;
-      //}
-      //return null;
     }
 
     private static _typesInitialized = false;
@@ -489,7 +488,7 @@ module Shumway.AVMX {
   }
 
   export class MultinameType extends Type {
-    constructor(public namespaces: Type [], public name: Type, public flags: number) {
+    constructor(public namespaces: Type [], public name: Type, public mn: Multiname) {
       super();
     }
     toString(): string {
@@ -605,13 +604,49 @@ module Shumway.AVMX {
   }
 
   export class Verifier {
+    domain: AXApplicationDomain;
     stateMap: { [s: number]: State; } = [];
-    constructor(private method: MethodInfo) {
-      Type.initializeTypes(method.abc.applicationDomain);
+    thisType: Type;
+    constructor(private methodInfo: MethodInfo) {
+      Type.initializeTypes(methodInfo.abc.applicationDomain);
+      this.domain = methodInfo.abc.applicationDomain;
+      // REDUX IMPRECISE
+      // this.thisType = methodInfo.holder ? Type.from(methodInfo.holder, this.domain) : Type.Any;
+      this.thisType = Type.Any;
+    }
+
+    private prepareEntryState(): State {
+      var entryState = new State();
+      var methodInfo = this.methodInfo;
+
+      entryState.local.push(this.thisType);
+
+      // Initialize entry state with parameter types.
+      var parameters = methodInfo.parameters;
+      for (var i = 0; i < parameters.length; i++) {
+        entryState.local.push(Type.fromName(parameters[i].getType(), this.domain).instanceType());
+      }
+
+      // Push the |rest| or |arguments| array type in the locals.
+      var remainingLocals = methodInfo.getBody().localCount - methodInfo.parameters.length - 1;
+
+      if (methodInfo.needsRest() || methodInfo.needsArguments()) {
+        entryState.local.push(Type.Array);
+        remainingLocals -= 1;
+      }
+
+      // Initialize locals with Type.Atom.Undefined.
+      for (var i = 0; i < remainingLocals; i++) {
+        entryState.local.push(Type.Undefined);
+      }
+
+      release || assert(entryState.local.length === methodInfo.getBody().localCount);
+
+      return entryState;
     }
 
     verify() {
-      var blockMap = new BlockMap(this.method.getBody());
+      var blockMap = new BlockMap(this.methodInfo.getBody());
       blockMap.build();
       blockMap.trace(writer, false);
 
@@ -625,10 +660,10 @@ module Shumway.AVMX {
       });
 
       var entry = blockMap.blocks[0];
-
+      var entryState = this.prepareEntryState();
       var stateMap = this.stateMap;
 
-      stateMap[entry.blockID] = new State();
+      stateMap[entry.blockID] = entryState;
 
       worklist.push(entry);
 
@@ -653,25 +688,28 @@ module Shumway.AVMX {
           if (worklist.contains(successor)) {
             // If the successor is already in the worklist then just merge the current
             // state into its entry state.
-            stateMap[successor.blockID].merge(state);
             if (writer) {
               writer.writeLn("Merging: " + stateMap[successor.blockID] + " with " + state);
             }
+            stateMap[successor.blockID].merge(state);
             continue;
           } else if (stateMap[successor.blockID]) {
             // If the successor's entry state is not null then we must have processed it already.
             if (!stateMap[successor.blockID].isSubset(state)) {
               // If the entry state is not a subset of the current state, then reprocess the block
               // by adding it to the worklist.
-              stateMap[successor.blockID].merge(state);
-              worklist.push(successor);
               if (writer) {
                 writer.writeLn("Recalculating: " + stateMap[successor.blockID] + " with " + state);
               }
+              stateMap[successor.blockID].merge(state);
+              worklist.push(successor);
             }
             continue;
           }
           // Propagate current state to successor blocks.
+          if (writer) {
+            writer.writeLn("Propagating: " + BlockMap.blockToString(successor) + " with " + state);
+          }
           stateMap[successor.blockID] = state.clone();
           worklist.push(successor);
         }
@@ -682,6 +720,11 @@ module Shumway.AVMX {
       var local = state.local;
       var stack = state.stack;
       var scope = state.scope;
+      var abc = this.methodInfo.abc;
+
+      var a, b, i, argCount;
+      var mn: Type;
+      var receiver: Type;
 
       function push(x: Type) {
         release || assert(x);
@@ -693,22 +736,83 @@ module Shumway.AVMX {
         return stack.pop();
       }
 
+      function popMultiname(i: number): Type {
+        var mn = abc.getMultiname(i);
+        if (mn.isRuntime()) {
+          var name: Type;
+          if (mn.isRuntimeName()) {
+            name = pop();
+          } else {
+            name = ConstantType.from(mn.name);
+          }
+          var namespaces: Type [];
+          if (mn.isRuntimeNamespace()) {
+            namespaces = [pop()];
+          } else {
+            namespaces = ConstantType.fromArray(mn.namespaces);
+          }
+          return new MultinameType(namespaces, name, mn);
+        }
+        return ConstantType.from(mn);
+      }
+
       if (writer) {
         writer.indent();
       }
-      var code = this.method.getBody().code;
+      var code = this.methodInfo.getBody().code;
       var bci = block.startBci;
+
+      function u30(): number {
+        var result = Bytes.u32(code, bci);
+        bci += Bytes.s32Length(code, bci);
+        return result;
+      }
+
       while (bci <= block.endBci) {
-        var bc: Bytecode = Bytes.u8(code, bci);
+        var bcs = bci;
+        var bc: Bytecode = Bytes.u8(code, bci++);
         if (writer) {
           writer.writeLn(Bytecode[bc].padRight(" ", 10) + ": " + state);
         }
         switch (bc) {
           case Bytecode.PUSHBYTE:
+          case Bytecode.PUSHSHORT:
             push(Type.Int);
             break;
           case Bytecode.PUSHSTRING:
             push(Type.String);
+            break;
+          case Bytecode.PUSHINT:
+            push(Type.Int);
+            break;
+          case Bytecode.PUSHUINT:
+            push(Type.Uint);
+            break;
+          case Bytecode.PUSHDOUBLE:
+            push(Type.Number);
+            break;
+          case Bytecode.PUSHTRUE:
+            push(Type.Boolean);
+            break;
+          case Bytecode.PUSHFALSE:
+            push(Type.Boolean);
+            break;
+          case Bytecode.PUSHNAN:
+            push(Type.Number);
+            break;
+          case Bytecode.POP:
+            pop();
+            break;
+          case Bytecode.DUP:
+            a = pop();
+            push(a);
+            push(a);
+            break;
+          case Bytecode.SWAP:
+            a = pop();
+            b = pop();
+            push(a);
+            push(b);
             break;
           case Bytecode.SETLOCAL0:
           case Bytecode.SETLOCAL1:
@@ -717,7 +821,11 @@ module Shumway.AVMX {
             local[bc - Bytecode.SETLOCAL0] = pop();
             break;
           case Bytecode.SETLOCAL:
-            local[Bytes.u30(code, bci + 1)] = pop();
+            local[u30()] = pop();
+            break;
+          case Bytecode.GETGLOBALSCOPE:
+            // REDUX
+            push(Type.Any);
             break;
           case Bytecode.COERCE_S:
             pop();
@@ -728,8 +836,23 @@ module Shumway.AVMX {
             pop();
             push(Type.Int);
             break;
+          case Bytecode.COERCE_U:
+          case Bytecode.CONVERT_U:
+            pop();
+            push(Type.Uint);
+            break;
+          case Bytecode.COERCE_D:
+          case Bytecode.CONVERT_D:
+            pop();
+            push(Type.Number);
+            break;
+          case Bytecode.COERCE_B:
+          case Bytecode.CONVERT_B:
+            pop();
+            push(Type.Boolean);
+            break;
           case Bytecode.GETLOCAL:
-            push(local[Bytes.u30(code, bci + 1)]);
+            push(local[u30()]);
             break;
           case Bytecode.GETLOCAL0:
           case Bytecode.GETLOCAL1:
@@ -737,9 +860,146 @@ module Shumway.AVMX {
           case Bytecode.GETLOCAL3:
             push(local[bc - Bytecode.GETLOCAL0]);
             break;
+          case Bytecode.IFNLT:
+          case Bytecode.IFGE:
+          case Bytecode.IFNLE:
+          case Bytecode.IFGT:
+          case Bytecode.IFNGT:
+          case Bytecode.IFLE:
+          case Bytecode.IFNGE:
+          case Bytecode.IFLT:
+          case Bytecode.IFEQ:
+          case Bytecode.IFNE:
+          case Bytecode.IFSTRICTEQ:
+          case Bytecode.IFSTRICTNE:
+            pop();
+            pop();
+            break;
+          case Bytecode.IFTRUE:
+          case Bytecode.IFFALSE:
+            pop();
+            break;
+          case Bytecode.JUMP:
+            break;
+          case Bytecode.GETPROPERTY:
+            mn = popMultiname(u30());
+            receiver = pop();
+            // REDUX IMPRECISE
+            push(Type.Any);
+            break;
+          case Bytecode.GETSLOT:
+            // REDUX IMPRECISE
+            pop();
+            push(Type.Any);
+            break;
+          case Bytecode.SETSLOT:
+            // REDUX IMPRECISE
+            pop();
+            pop();
+            push(Type.Any);
+            break;
+          case Bytecode.NEGATE:
+          case Bytecode.INCREMENT:
+          case Bytecode.DECREMENT:
+            pop();
+            push(Type.Number);
+            break;
+          case Bytecode.DECREMENT_I:
+          case Bytecode.INCREMENT_I:
+          case Bytecode.NEGATE_I:
+            pop();
+            push(Type.Int);
+            break;
+          case Bytecode.ADD_I:
+          case Bytecode.SUBTRACT_I:
+          case Bytecode.MULTIPLY_I:
+            pop();
+            pop();
+            push(Type.Int); // REDUX: or maybe this should be Number?
+            break;
+          case Bytecode.ADD:
+            b = pop();
+            a = pop();
+            if (a.isNumeric() && b.isNumeric()) {
+              push(Type.Number);
+            } else if (a === Type.String || b === Type.String) {
+              push(Type.String);
+            } else {
+              push(Type.Any);
+            }
+            break;
+          case Bytecode.SUBTRACT:
+          case Bytecode.MULTIPLY:
+          case Bytecode.DIVIDE:
+          case Bytecode.MODULO:
+            pop();
+            pop();
+            push(Type.Number);
+            break;
+          case Bytecode.BITAND:
+          case Bytecode.BITOR:
+          case Bytecode.BITXOR:
+          case Bytecode.LSHIFT:
+          case Bytecode.RSHIFT:
+          case Bytecode.URSHIFT:
+            pop();
+            pop();
+            push(Type.Int);
+            break;
+          case Bytecode.BITNOT:
+            pop();
+            push(Type.Int);
+            break;
+          case Bytecode.EQUALS:
+          case Bytecode.STRICTEQUALS:
+          case Bytecode.LESSTHAN:
+          case Bytecode.LESSEQUALS:
+          case Bytecode.GREATERTHAN:
+          case Bytecode.GREATEREQUALS:
+          case Bytecode.INSTANCEOF:
+          case Bytecode.IN:
+            pop();
+            pop();
+            push(Type.Boolean);
+            break;
+          case Bytecode.ISTYPE:
+            pop();
+            push(Type.Boolean);
+            break;
+          case Bytecode.ISTYPELATE:
+            pop();
+            pop();
+            push(Type.Boolean);
+            break;
+          case Bytecode.RETURNVALUE:
+            pop();
+            break;
+          case Bytecode.LABEL:
+            break;
+          case Bytecode.KILL:
+            local[u30()] = Type.Undefined;
+            break;
+          case Bytecode.CALLSUPER:
+          case Bytecode.CALLSUPERVOID:
+          case Bytecode.CALLPROPVOID:
+          case Bytecode.CALLPROPERTY:
+          case Bytecode.CALLPROPLEX:
+            // REDUX IMPRECISE
+            i = u30();
+            argCount = u30();
+            popManyIntoVoid(stack, argCount);
+            mn = popMultiname(i);
+            receiver = pop();
+            if (bc === Bytecode.CALLPROPVOID || bc === Bytecode.CALLSUPERVOID) {
+              break;
+            }
+            push(Type.Any);
+            break;
           default:
+            notImplemented(Bytecode[bc]);
         }
-        bci += lengthAt(code, bci);
+        // release || assert(bci === (bcs + lengthAt(code, bcs)), "Current BCI: " + bci + ", expected: " + (bcs + lengthAt(code, bcs)));
+        bci = bcs + lengthAt(code, bcs);
       }
       if (writer) {
         writer.outdent();
