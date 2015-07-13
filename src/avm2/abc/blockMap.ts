@@ -274,7 +274,7 @@ module Shumway.AVMX {
             var caseCount = Bytes.u30(code, bci + 4);
             var caseOffset = bci + 4 + Bytes.s32Length(code, bci + 4);
             for (var i = 0; i < caseCount; i++) {
-              successors.push(this.makeBlock(Bytes.s24(code, bci + caseOffset)));
+              successors.push(this.makeBlock(bci + Bytes.s24(code, caseOffset)));
               caseOffset += 3;
             }
             this.setSuccessors(bci, successors);

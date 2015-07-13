@@ -88,7 +88,9 @@ module Shumway.AVMX {
     }
 
     static fromName(mn: Multiname, domain: AXApplicationDomain): Type {
-      if (mn === undefined) {
+      if (mn === null) {
+        return Type.Any;
+      } else if (mn === undefined) {
         return Type.Undefined;
       } else {
         var qn = mn.isQName() ? mn.getMangledName() : undefined;
@@ -548,8 +550,8 @@ module Shumway.AVMX {
     toString(): string {
       return "<" + this.id + (this.originalId ? ":" + this.originalId : "") +
         ", L[" + this.local.join(", ") + "]" +
-        ", S[" + this.stack.join(", ") + "]" +
-        ", $[" + this.scope.join(", ") + "]>";
+        ", $[" + this.scope.join(", ") + "]" +
+        ", S[" + this.stack.join(", ") + "]>";
     }
     equals(other: State): boolean {
       return State._arrayEquals(this.stack, other.stack) &&
@@ -587,12 +589,12 @@ module Shumway.AVMX {
       return true;
     }
     merge(other: State) {
-      State._mergeArrays(this.local, other.local);
-      State._mergeArrays(this.stack, other.stack);
-      State._mergeArrays(this.scope, other.scope);
+      State._mergeArrays(this.local, other.local, "Local");
+      State._mergeArrays(this.stack, other.stack, "Stack");
+      State._mergeArrays(this.scope, other.scope, "Scope");
     }
-    private static _mergeArrays(a: Type [], b: Type []) {
-      release || assert(a.length === b.length, "a: " + a + " b: " + b);
+    private static _mergeArrays(a: Type [], b: Type [], name: string) {
+      release || assert(a.length === b.length, name + " Array, a: " + a + " b: " + b);
       for (var i = a.length - 1; i >= 0; i--) {
         release || assert((a[i] !== undefined) && (b[i] !== undefined));
         if (a[i] === b[i]) {
@@ -699,7 +701,7 @@ module Shumway.AVMX {
               // If the entry state is not a subset of the current state, then reprocess the block
               // by adding it to the worklist.
               if (writer) {
-                writer.writeLn("Recalculating: " + stateMap[successor.blockID] + " with " + state);
+                writer.writeLn("Recalculating: " + BlockMap.blockToString(successor) + " " + stateMap[successor.blockID] + " with " + state);
               }
               stateMap[successor.blockID].merge(state);
               worklist.push(successor);
@@ -724,7 +726,7 @@ module Shumway.AVMX {
 
       var a, b, i, argCount;
       var mn: Type;
-      var receiver: Type;
+      var receiver: Type, value: Type, object: Type;
 
       function push(x: Type) {
         release || assert(x);
@@ -772,9 +774,18 @@ module Shumway.AVMX {
         var bcs = bci;
         var bc: Bytecode = Bytes.u8(code, bci++);
         if (writer) {
-          writer.writeLn(Bytecode[bc].padRight(" ", 10) + ": " + state);
+          writer.writeLn(Bytecode[bc].padRight(" ", 20) + ": " + state);
         }
         switch (bc) {
+          case Bytecode.THROW:
+            pop();
+            break;
+          case Bytecode.PUSHNULL:
+            push(Type.Null);
+            break;
+          case Bytecode.PUSHUNDEFINED:
+            push(Type.Undefined);
+            break;
           case Bytecode.PUSHBYTE:
           case Bytecode.PUSHSHORT:
             push(Type.Int);
@@ -814,6 +825,31 @@ module Shumway.AVMX {
             push(a);
             push(b);
             break;
+          case Bytecode.PUSHSCOPE:
+            scope.push(pop());
+            break;
+          case Bytecode.PUSHWITH:
+            pop()
+            scope.push(Type.Any);
+            break;
+          case Bytecode.NEWARRAY:
+            popManyIntoVoid(stack, u30());
+            push(Type.Array);
+            break;
+          case Bytecode.NEWACTIVATION:
+            // REDUX IMPRECISE
+            push(Type.Any);
+            break;
+          case Bytecode.NEWOBJECT:
+            popManyIntoVoid(stack, u30() * 2);
+            push(Type.Object);
+            break;
+          case Bytecode.NEWCLASS:
+            push(Type.Any);
+            break;
+          case Bytecode.NEWFUNCTION:
+            push(Type.Function);
+            break;
           case Bytecode.SETLOCAL0:
           case Bytecode.SETLOCAL1:
           case Bytecode.SETLOCAL2:
@@ -827,7 +863,11 @@ module Shumway.AVMX {
             // REDUX
             push(Type.Any);
             break;
+          case Bytecode.GETSCOPEOBJECT:
+            push(scope[u30()]);
+            break;
           case Bytecode.COERCE_S:
+          case Bytecode.CONVERT_S:
             pop();
             push(Type.String);
             break;
@@ -877,7 +917,23 @@ module Shumway.AVMX {
             break;
           case Bytecode.IFTRUE:
           case Bytecode.IFFALSE:
+          case Bytecode.LOOKUPSWITCH:
             pop();
+            break;
+          case Bytecode.POPSCOPE:
+            scope.pop();
+            break;
+          case Bytecode.NEXTNAME:
+          case Bytecode.NEXTVALUE:
+            pop(Type.Int);
+            pop();
+            push(Type.Any);
+            break;
+          case Bytecode.HASNEXT:
+            push(Type.Boolean);
+            break;
+          case Bytecode.HASNEXT2:
+            push(Type.Boolean);
             break;
           case Bytecode.JUMP:
             break;
@@ -896,13 +952,27 @@ module Shumway.AVMX {
             // REDUX IMPRECISE
             pop();
             pop();
-            push(Type.Any);
+            break;
+          case Bytecode.INITPROPERTY:
+          case Bytecode.SETPROPERTY:
+            // REDUX IMPRECISE
+            value = pop();
+            popMultiname(u30());
+            receiver = pop();
             break;
           case Bytecode.NEGATE:
           case Bytecode.INCREMENT:
           case Bytecode.DECREMENT:
             pop();
             push(Type.Number);
+            break;
+          case Bytecode.INCLOCAL:
+          case Bytecode.DECLOCAL:
+            local[u30()] = Type.Number;
+            break;
+          case Bytecode.TYPEOF:
+            pop();
+            push(Type.String);
             break;
           case Bytecode.DECREMENT_I:
           case Bytecode.INCREMENT_I:
@@ -916,6 +986,10 @@ module Shumway.AVMX {
             pop();
             pop();
             push(Type.Int); // REDUX: or maybe this should be Number?
+            break;
+          case Bytecode.NOT:
+            pop();
+            push(Type.Boolean);
             break;
           case Bytecode.ADD:
             b = pop();
@@ -971,6 +1045,9 @@ module Shumway.AVMX {
             pop();
             push(Type.Boolean);
             break;
+          case Bytecode.RETURNVOID:
+            // REDUX NOT DONE;
+            break;
           case Bytecode.RETURNVALUE:
             pop();
             break;
@@ -979,6 +1056,29 @@ module Shumway.AVMX {
           case Bytecode.KILL:
             local[u30()] = Type.Undefined;
             break;
+          case Bytecode.CONSTRUCTSUPER:
+            // REDUX IMPRECISE
+            popManyIntoVoid(stack, u30());
+            receiver = pop();
+            break;
+          case Bytecode.CONSTRUCT:
+            // REDUX IMPRECISE
+            popManyIntoVoid(stack, u30());
+            stack[stack.length - 1] = Type.Any;
+            break;
+          case Bytecode.CONSTRUCTPROP:
+            // REDUX IMPRECISE
+            i = u30();
+            popManyIntoVoid(stack, u30());
+            mn = popMultiname(i);
+            stack[stack.length - 1] = Type.Any;
+            break;
+          case Bytecode.CALL:
+            popManyIntoVoid(stack, u30());
+            object = pop();
+            pop();
+            push(Type.Any);
+            break;
           case Bytecode.CALLSUPER:
           case Bytecode.CALLSUPERVOID:
           case Bytecode.CALLPROPVOID:
@@ -986,14 +1086,26 @@ module Shumway.AVMX {
           case Bytecode.CALLPROPLEX:
             // REDUX IMPRECISE
             i = u30();
-            argCount = u30();
-            popManyIntoVoid(stack, argCount);
+            popManyIntoVoid(stack, u30());
             mn = popMultiname(i);
             receiver = pop();
             if (bc === Bytecode.CALLPROPVOID || bc === Bytecode.CALLSUPERVOID) {
               break;
             }
             push(Type.Any);
+            break;
+          case Bytecode.FINDPROPSTRICT:
+          case Bytecode.FINDPROPERTY:
+            // REDUX IMPRECISE
+            mn = popMultiname(u30());
+            push(Type.Any);
+            break;
+          case Bytecode.COERCE:
+            // REDUX IMPRECISE
+            popMultiname(u30());
+            stack[stack.length - 1] = Type.Any;
+            break;
+          case Bytecode.COERCE_A:
             break;
           default:
             notImplemented(Bytecode[bc]);
