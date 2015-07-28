@@ -180,7 +180,7 @@ module Shumway.AVMX {
       return null;
     }
 
-    getTrait(mn: Type, isSetter: boolean, followSuperType: boolean): TraitInfo {
+    getTrait(mn: Multiname | MultinameType, isSetter: boolean, followSuperType: boolean): TraitInfo {
       return null;
     }
 
@@ -313,11 +313,11 @@ module Shumway.AVMX {
       //return null;
     }
 
-    findTraitByName(traits: TraitInfo [], mn: any, isSetter: boolean) {
-      // REDUX
-      return;
-
-      //var isGetter = !isSetter;
+    findTraitByName(traits: Traits, mn: Multiname, isSetter: boolean): TraitInfo {
+      traits.resolve();
+      var isGetter = !isSetter;
+      // REDUX: Handle getters / setters correctly here.
+      return traits.getTrait(mn);
       //var trait;
       //if (!Multiname.isQName(mn)) {
       //  release || assert(mn instanceof Multiname);
@@ -350,40 +350,35 @@ module Shumway.AVMX {
       //}
     }
 
-    getTrait(mn: Type, isSetter: boolean, followSuperType: boolean): TraitInfo {
-      // REDUX
-      return null;
-      //if (mn.isMultinameType()) {
-      //  return null;
-      //}
-      //var mnValue = mn.getConstantValue();
-      //if (mnValue.isAttribute()) {
-      //  return null;
-      //}
-      //if (followSuperType && (this.isInstanceInfo() || this.isClassInfo())) {
-      //  var node = this;
-      //  do {
-      //    var trait = node.getTrait(mn, isSetter, false);
-      //    if (!trait) {
-      //      node = node.super();
-      //    }
-      //  } while (!trait && node);
-      //  return trait;
-      //} else {
-      //  return this.findTraitByName(this.info.traits, mnValue, isSetter);
-      //}
+    getTrait(mn: Multiname | MultinameType, isSetter: boolean, followSuperType: boolean): TraitInfo {
+      if (mn instanceof MultinameType) {
+        return null;
+      } else if (mn instanceof Multiname) {
+        if (mn.isAttribute()) {
+          return null;
+        }
+        if (followSuperType && (this.isInstanceInfo() || this.isClassInfo())) {
+          var node = this;
+          do {
+            var trait = node.getTrait(mn, isSetter, false);
+            if (!trait) {
+              node = node.super();
+            }
+          } while (!trait && node);
+          return trait;
+        } else {
+          return this.findTraitByName((<any>(this.info)).traits, mn, isSetter);
+        }
+      }
     }
 
-    getTraitAt(slotId: number) {
-      // REDUX;
+    getTraitTypeNameAt(i: number): Multiname {
+      // REDUX, we need to make sure the runtime traits are resolved here.
+      var runtimeTrait = (<any>(this.info)).runtimeTraits.getSlot(i);
+      if (runtimeTrait) {
+        return runtimeTrait.typeName;
+      }
       return null;
-      //var traits = this.info.traits;
-      //for (var i = traits.length - 1; i >= 0; i--) {
-      //  if (traits[i].slotId === slotId) {
-      //    return traits[i];
-      //  }
-      //}
-      //Shumway.Debug.unexpected("Cannot find trait with slotId: " + slotId + " in " + traits);
     }
 
     equals(other: Type): boolean {
@@ -486,6 +481,15 @@ module Shumway.AVMX {
       // REDUX
       return null;
       // return this._cachedType || (this._cachedType = Type.fromName(this.methodInfo.returnType, this.domain));
+    }
+  }
+
+  export class ActivationType extends TraitsType {
+    constructor(public methodInfo: MethodInfo, domain: AXApplicationDomain) {
+      super(Type.Function.info, domain);
+    }
+    toString(): string {
+      return "AC";
     }
   }
 
@@ -609,12 +613,29 @@ module Shumway.AVMX {
     domain: AXApplicationDomain;
     stateMap: { [s: number]: State; } = [];
     thisType: Type;
+    activationType: ActivationType;
+    savedScope: Type [];
     constructor(private methodInfo: MethodInfo) {
+      if (methodInfo.trait) {
+        methodInfo.trait.resolve();
+      }
+      writer && writer.writeLn("Verifying: " + methodInfo + ": " + methodInfo.trait);
+
       Type.initializeTypes(methodInfo.abc.applicationDomain);
       this.domain = methodInfo.abc.applicationDomain;
+      this.savedScope = [];
+
       // REDUX IMPRECISE
       // this.thisType = methodInfo.holder ? Type.from(methodInfo.holder, this.domain) : Type.Any;
-      this.thisType = Type.Any;
+      //this.thisType = Type.Any;
+      //this.thisType =
+      if (methodInfo.trait) {
+        this.thisType = Type.from(methodInfo.trait.holder, this.domain);
+      } else {
+        this.thisType = Type.Any;
+      }
+
+      this.activationType = new ActivationType(methodInfo, this.domain);
     }
 
     private prepareEntryState(): State {
@@ -678,10 +699,12 @@ module Shumway.AVMX {
           writer.writeLn("Processing: " + BlockMap.blockToString(block));
         }
 
+        // Use the entry state of the block.
         var state = stateMap[block.blockID].clone();
 
+        // Run the abstract interpretation on the block. This mutates the passed
+        // in |state| object.
         this.processBlock(block, state);
-
         if (writer) {
           writer.writeLn(state.toString());
         }
@@ -723,9 +746,10 @@ module Shumway.AVMX {
       var stack = state.stack;
       var scope = state.scope;
       var abc = this.methodInfo.abc;
+      var self = this;
 
       var a, b, i, argCount;
-      var mn: Type;
+      var mn: Multiname | MultinameType;
       var receiver: Type, value: Type, object: Type;
 
       function push(x: Type) {
@@ -738,7 +762,7 @@ module Shumway.AVMX {
         return stack.pop();
       }
 
-      function popMultiname(i: number): Type {
+      function popMultiname(i: number): Multiname | MultinameType {
         var mn = abc.getMultiname(i);
         if (mn.isRuntime()) {
           var name: Type;
@@ -755,7 +779,63 @@ module Shumway.AVMX {
           }
           return new MultinameType(namespaces, name, mn);
         }
-        return ConstantType.from(mn);
+        return mn;
+      }
+
+      function writeResult(type: Type, message: string) {
+        writer.colorLn(type === Type.Any ? IndentingWriter.YELLOW : IndentingWriter.GREEN, message);
+      }
+
+      function getProperty(object: Type, mn: Multiname | MultinameType): Type {
+        var type: Type = Type.Any;
+        if (object.isTraitsType() && mn instanceof Multiname) {
+          var trait = object.asTraitsType().getTrait(mn, false, false);
+          if (trait) {
+            if (trait instanceof SlotTraitInfo) {
+              type = Type.fromName(trait.getTypeName(), self.domain).instanceType();
+            }
+          }
+        }
+        writer && writeResult(type, "getProperty(" + object + ", " + mn + ") => " + type);
+        return type;
+      }
+
+      function findProperty(mn: Multiname | MultinameType, strict: boolean): Type {
+        var type: Type = Type.Any;
+        if (mn instanceof Multiname) {
+          for (var i = scope.length - 1; i >= -self.savedScope.length; i--) {
+            var scopeType = i >= 0 ? scope[i] : self.savedScope[self.savedScope.length + i];
+            if (scopeType.isTraitsType()) {
+              var trait = scopeType.asTraitsType().getTrait(mn, false, false);
+              if (trait) {
+                writer && writeResult(scopeType, "findProperty(" + mn + ") => " + scopeType);
+                return scopeType;
+              }
+            } else {
+              writer && writeResult(Type.Any, "findProperty(" + mn + ") => " + Type.Any + ", because of untyped scope object.");
+              return Type.Any;
+            }
+          }
+          // Search application domain.
+          var script = self.domain.findDefiningScript(mn, false);
+          if (script) {
+            type = Type.from(script, self.domain);
+          }
+        }
+        writer && writeResult(type, "findProperty(" + mn + ") => " + type);
+        return type;
+      }
+
+      function getSlot(object: Type, i: number): Type {
+        var type: Type = Type.Any;
+        if (object.isTraitsType()) {
+          var typeName = object.asTraitsType().getTraitTypeNameAt(i);
+          if (typeName) {
+            type = Type.fromName(typeName, self.domain).instanceType();
+          }
+        }
+        writer && writeResult(type, "getSlot(" + object + ", " + i + ") => " + type);
+        return type;
       }
 
       if (writer) {
@@ -837,8 +917,7 @@ module Shumway.AVMX {
             push(Type.Array);
             break;
           case Bytecode.NEWACTIVATION:
-            // REDUX IMPRECISE
-            push(Type.Any);
+            push(self.activationType);
             break;
           case Bytecode.NEWOBJECT:
             popManyIntoVoid(stack, u30() * 2);
@@ -939,14 +1018,11 @@ module Shumway.AVMX {
             break;
           case Bytecode.GETPROPERTY:
             mn = popMultiname(u30());
-            receiver = pop();
-            // REDUX IMPRECISE
-            push(Type.Any);
+            object = pop();
+            push(getProperty(object, mn));
             break;
           case Bytecode.GETSLOT:
-            // REDUX IMPRECISE
-            pop();
-            push(Type.Any);
+            push(getSlot(pop(), u30()));
             break;
           case Bytecode.SETSLOT:
             // REDUX IMPRECISE
@@ -1096,16 +1172,18 @@ module Shumway.AVMX {
             break;
           case Bytecode.FINDPROPSTRICT:
           case Bytecode.FINDPROPERTY:
-            // REDUX IMPRECISE
-            mn = popMultiname(u30());
-            push(Type.Any);
+            push(findProperty(popMultiname(u30()), bc === Bytecode.FINDPROPSTRICT))
             break;
           case Bytecode.COERCE:
-            // REDUX IMPRECISE
-            popMultiname(u30());
-            stack[stack.length - 1] = Type.Any;
+            stack[stack.length - 1] = Type.fromName(<Multiname>popMultiname(u30()), self.domain).instanceType();
             break;
           case Bytecode.COERCE_A:
+            break;
+          case Bytecode.DEBUG:
+          case Bytecode.DEBUGFILE:
+          case Bytecode.DEBUGLINE:
+          case Bytecode.BKPTLINE:
+          case Bytecode.TIMESTAMP:
             break;
           default:
             notImplemented(Bytecode[bc]);
