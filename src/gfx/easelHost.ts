@@ -29,6 +29,9 @@ module Shumway.GFX {
   export var ContextMenuButton = 2;
 
   export class EaselHost {
+    private static MAX_RAF_DURATION_FOR_VISIBLE_DOCUMENT = 500;
+    private static MAX_RAF_TIMEOUT_FOR_HIDDEN_DOCUMENT = 5000;
+
     private static _mouseEvents = Shumway.Remoting.MouseEventNames;
     private static _keyboardEvents = Shumway.Remoting.KeyboardEventNames;
 
@@ -154,20 +157,28 @@ module Shumway.GFX {
       var self = this;
       var isThrottledDown = false;
       var lastTick = performance.now();
+      var pendingTimeout = 0;
       // Poll for changes in the rAF frequency.
       requestAnimationFrame(function tick() {
         var thisTick = performance.now();
         var elapsed = thisTick - lastTick;
-        if (elapsed < 500) {
+        if (elapsed < EaselHost.MAX_RAF_DURATION_FOR_VISIBLE_DOCUMENT) {
           if (isThrottledDown) {
             self._sendFocusEvent(Shumway.Remoting.FocusEventType.DocumentVisible);
             isThrottledDown = false;
           }
-        } else if (!isThrottledDown) {
-          // If the last tick was over 500 ms ago, we are probably outside of the viewport. Send a |DocumentHidden|
-          // event to the player to stop execution.
-          isThrottledDown = true;
-          self._sendFocusEvent(Shumway.Remoting.FocusEventType.DocumentHidden);
+          if (pendingTimeout) {
+            clearTimeout(pendingTimeout);
+            pendingTimeout = 0;
+          }
+        } else if (!isThrottledDown && pendingTimeout === 0) {
+          // If the last tick was over |EaselHost.MAX_RAF_DURATION_FOR_VISIBLE_DOCUMENT| ms ago, we are probably outside
+          // of the viewport. Send a |DocumentHidden| event to the player to stop execution.
+          pendingTimeout = setTimeout(function () {
+            pendingTimeout = 0;
+            isThrottledDown = true;
+            self._sendFocusEvent(Shumway.Remoting.FocusEventType.DocumentHidden);
+          }, EaselHost.MAX_RAF_TIMEOUT_FOR_HIDDEN_DOCUMENT);
         }
         lastTick = thisTick;
         requestAnimationFrame(tick);
