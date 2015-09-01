@@ -1837,9 +1837,6 @@ module Shumway.AVMX.AS.flash.display {
      */
     _setStaticContentFromSymbol(symbol: Shumway.Timeline.DisplaySymbol) {
       release || assert(!symbol.dynamic);
-      if (this._symbol === symbol) {
-        return;
-      }
       if (this._canHaveGraphics()) {
         release || assert(symbol instanceof flash.display.ShapeSymbol);
         this._graphics = (<flash.display.ShapeSymbol>symbol).graphics;
