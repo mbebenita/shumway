@@ -351,36 +351,36 @@ module Shumway.AVMX.AS.flash.ui {
     // _finger: string;
     // _device: flash.ui.GameInputDevice;
     get numValues(): number /*int*/ {
-      notImplemented("public flash.ui.GameInputControl::get numValues"); return;
+      release || notImplemented("public flash.ui.GameInputControl::get numValues"); return;
       // return this._numValues;
     }
     get index(): number /*int*/ {
-      notImplemented("public flash.ui.GameInputControl::get index"); return;
+      release || notImplemented("public flash.ui.GameInputControl::get index"); return;
       // return this._index;
     }
     get relative(): boolean {
-      notImplemented("public flash.ui.GameInputControl::get relative"); return;
+      release || notImplemented("public flash.ui.GameInputControl::get relative"); return;
       // return this._relative;
     }
     get type(): string {
-      notImplemented("public flash.ui.GameInputControl::get type"); return;
+      release || notImplemented("public flash.ui.GameInputControl::get type"); return;
       // return this._type;
     }
     get hand(): string {
-      notImplemented("public flash.ui.GameInputControl::get hand"); return;
+      release || notImplemented("public flash.ui.GameInputControl::get hand"); return;
       // return this._hand;
     }
     get finger(): string {
-      notImplemented("public flash.ui.GameInputControl::get finger"); return;
+      release || notImplemented("public flash.ui.GameInputControl::get finger"); return;
       // return this._finger;
     }
     get device(): flash.ui.GameInputDevice {
-      notImplemented("public flash.ui.GameInputControl::get device"); return;
+      release || notImplemented("public flash.ui.GameInputControl::get device"); return;
       // return this._device;
     }
     getValueAt(index: number /*int*/ = 0): number {
       index = index | 0;
-      notImplemented("public flash.ui.GameInputControl::getValueAt"); return;
+      release || notImplemented("public flash.ui.GameInputControl::getValueAt"); return;
     }
   }
 
@@ -413,49 +413,49 @@ module Shumway.AVMX.AS.flash.ui {
     // _id: string;
     // _name: string;
     get numControls(): number /*int*/ {
-      notImplemented("public flash.ui.GameInputDevice::get numControls"); return;
+      release || notImplemented("public flash.ui.GameInputDevice::get numControls"); return;
       // return this._numControls;
     }
     get sampleInterval(): number /*int*/ {
-      notImplemented("public flash.ui.GameInputDevice::get sampleInterval"); return;
+      release || notImplemented("public flash.ui.GameInputDevice::get sampleInterval"); return;
       // return this._sampleInterval;
     }
     set sampleInterval(val: number /*int*/) {
       val = val | 0;
-      notImplemented("public flash.ui.GameInputDevice::set sampleInterval"); return;
+      release || notImplemented("public flash.ui.GameInputDevice::set sampleInterval"); return;
       // this._sampleInterval = val;
     }
     get enabled(): boolean {
-      notImplemented("public flash.ui.GameInputDevice::get enabled"); return;
+      release || notImplemented("public flash.ui.GameInputDevice::get enabled"); return;
       // return this._enabled;
     }
     set enabled(val: boolean) {
       val = !!val;
-      notImplemented("public flash.ui.GameInputDevice::set enabled"); return;
+      release || notImplemented("public flash.ui.GameInputDevice::set enabled"); return;
       // this._enabled = val;
     }
     get id(): string {
-      notImplemented("public flash.ui.GameInputDevice::get id"); return;
+      release || notImplemented("public flash.ui.GameInputDevice::get id"); return;
       // return this._id;
     }
     get name(): string {
-      notImplemented("public flash.ui.GameInputDevice::get name"); return;
+      release || notImplemented("public flash.ui.GameInputDevice::get name"); return;
       // return this._name;
     }
     getControlAt(i: number /*int*/): flash.ui.GameInputControl {
       i = i | 0;
-      notImplemented("public flash.ui.GameInputDevice::getControlAt"); return;
+      release || notImplemented("public flash.ui.GameInputDevice::getControlAt"); return;
     }
     startCachingSamples(numSamples: number /*int*/, controls: GenericVector): void {
       numSamples = numSamples | 0; controls = controls;
-      notImplemented("public flash.ui.GameInputDevice::startCachingSamples"); return;
+      release || notImplemented("public flash.ui.GameInputDevice::startCachingSamples"); return;
     }
     stopCachingSamples(): void {
-      notImplemented("public flash.ui.GameInputDevice::stopCachingSamples"); return;
+      release || notImplemented("public flash.ui.GameInputDevice::stopCachingSamples"); return;
     }
     getCachedSamples(data: flash.utils.ByteArray, append: boolean = false): number /*int*/ {
       data = data; append = !!append;
-      notImplemented("public flash.ui.GameInputDevice::getCachedSamples"); return;
+      release || notImplemented("public flash.ui.GameInputDevice::getCachedSamples"); return;
     }
   }
 
@@ -832,23 +832,23 @@ module Shumway.AVMX.AS.flash.ui {
     // static _hasVirtualKeyboard: boolean;
     // static _physicalKeyboardType: string;
     static get capsLock(): boolean {
-      notImplemented("public flash.ui.Keyboard::get capsLock"); return;
+      release || notImplemented("public flash.ui.Keyboard::get capsLock"); return;
       // return this._capsLock;
     }
     static get numLock(): boolean {
-      notImplemented("public flash.ui.Keyboard::get numLock"); return;
+      release || notImplemented("public flash.ui.Keyboard::get numLock"); return;
       // return this._numLock;
     }
     static get hasVirtualKeyboard(): boolean {
-      notImplemented("public flash.ui.Keyboard::get hasVirtualKeyboard"); return;
+      release || notImplemented("public flash.ui.Keyboard::get hasVirtualKeyboard"); return;
       // return this._hasVirtualKeyboard;
     }
     static get physicalKeyboardType(): string {
-      notImplemented("public flash.ui.Keyboard::get physicalKeyboardType"); return;
+      release || notImplemented("public flash.ui.Keyboard::get physicalKeyboardType"); return;
       // return this._physicalKeyboardType;
     }
     static isAccessible(): boolean {
-      notImplemented("public flash.ui.Keyboard::static isAccessible"); return;
+      release || notImplemented("public flash.ui.Keyboard::static isAccessible"); return;
     }
   }
 
@@ -1109,11 +1109,11 @@ module Shumway.AVMX.AS.flash.ui {
     }
     static registerCursor(name: string, cursor: flash.ui.MouseCursorData): void {
       name = axCoerceString(name); cursor = cursor;
-      notImplemented("public flash.ui.Mouse::static registerCursor"); return;
+      release || notImplemented("public flash.ui.Mouse::static registerCursor"); return;
     }
     static unregisterCursor(name: string): void {
       name = axCoerceString(name);
-      notImplemented("public flash.ui.Mouse::static unregisterCursor"); return;
+      release || notImplemented("public flash.ui.Mouse::static unregisterCursor"); return;
     }
     static _currentPosition: flash.geom.Point;
     /**
@@ -1182,30 +1182,30 @@ module Shumway.AVMX.AS.flash.ui {
     // _hotSpot: flash.geom.Point;
     // _frameRate: number;
     get data(): GenericVector {
-      notImplemented("public flash.ui.MouseCursorData::get data"); return;
+      release || notImplemented("public flash.ui.MouseCursorData::get data"); return;
       // return this._data;
     }
     set data(data: GenericVector) {
       data = data;
-      notImplemented("public flash.ui.MouseCursorData::set data"); return;
+      release || notImplemented("public flash.ui.MouseCursorData::set data"); return;
       // this._data = data;
     }
     get hotSpot(): flash.geom.Point {
-      notImplemented("public flash.ui.MouseCursorData::get hotSpot"); return;
+      release || notImplemented("public flash.ui.MouseCursorData::get hotSpot"); return;
       // return this._hotSpot;
     }
     set hotSpot(data: flash.geom.Point) {
       data = data;
-      notImplemented("public flash.ui.MouseCursorData::set hotSpot"); return;
+      release || notImplemented("public flash.ui.MouseCursorData::set hotSpot"); return;
       // this._hotSpot = data;
     }
     get frameRate(): number {
-      notImplemented("public flash.ui.MouseCursorData::get frameRate"); return;
+      release || notImplemented("public flash.ui.MouseCursorData::get frameRate"); return;
       // return this._frameRate;
     }
     set frameRate(data: number) {
       data = +data;
-      notImplemented("public flash.ui.MouseCursorData::set frameRate"); return;
+      release || notImplemented("public flash.ui.MouseCursorData::set frameRate"); return;
       // this._frameRate = data;
     }
   }
@@ -1224,12 +1224,12 @@ module Shumway.AVMX.AS.flash.ui {
     // static _maxTouchPoints: number /*int*/;
     // static _mapTouchToMouse: boolean;
     static get inputMode(): string {
-      notImplemented("public flash.ui.Multitouch::get inputMode"); return;
+      release || notImplemented("public flash.ui.Multitouch::get inputMode"); return;
       // return this._inputMode;
     }
     static set inputMode(value: string) {
       value = axCoerceString(value);
-      notImplemented("public flash.ui.Multitouch::set inputMode"); return;
+      release || notImplemented("public flash.ui.Multitouch::set inputMode"); return;
       // this._inputMode = value;
     }
     static get supportsTouchEvents(): boolean {
@@ -1259,7 +1259,7 @@ module Shumway.AVMX.AS.flash.ui {
     }
     static set mapTouchToMouse(value: boolean) {
       value = !!value;
-      notImplemented("public flash.ui.Multitouch::set mapTouchToMouse"); return;
+      release || notImplemented("public flash.ui.Multitouch::set mapTouchToMouse"); return;
       // this._mapTouchToMouse = value;
     }
   }
