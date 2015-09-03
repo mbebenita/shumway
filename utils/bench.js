@@ -185,6 +185,7 @@ function run() {
   function runBenchmarks() {
     var result = {};
     result["HelloWorld"] = runBenchmark("js build/ts/shell.js -r -x test/avm2/shumway/hello.abc", iterations);
+    result["HelloWorld w/Bundles"] = runBenchmark("js build/ts/shell.js -r -b -x test/avm2/shumway/hello.abc", iterations);
     result["Many w/o Pump"] = runBenchmark("js build/ts/shell.js -x test/bench/many.swf -r -det -fc 30 -enablePump false", iterations);
     result["Many"] = runBenchmark("js build/ts/shell.js -x test/bench/many.swf -r -det -fc 30", iterations);
     return result;
