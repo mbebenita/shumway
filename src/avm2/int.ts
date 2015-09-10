@@ -98,7 +98,7 @@ module Shumway.AVMX {
 
   export function interpret(self: Object, methodInfo: MethodInfo, savedScope: Scope, args: any [],
                             callee: AXFunction) {
-    executionWriter && executionWriter.enter("> " + methodInfo);
+    executionWriter && executionWriter.enter("> " + methodInfo.trait + " " + Array.prototype.slice.call(args, 0).join(", "));
     try {
       var result = _interpret(self, methodInfo, savedScope, args, callee);
       executionWriter && executionWriter.leave("< " + methodInfo.trait);

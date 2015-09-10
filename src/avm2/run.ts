@@ -168,7 +168,7 @@ module Shumway.AVMX {
     Interpreter = 4
   }
 
-  var writer = new IndentingWriter(false, function (x) { dumpLine(x); } );
+  var writer = new IndentingWriter(false);
   export var runtimeWriter = null;
   export var executionWriter = null;
   export var interpreterWriter = null;
