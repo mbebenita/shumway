@@ -22,7 +22,6 @@
 /// <reference path='2d/surface.ts'/>
 /// <reference path='2d/2d.ts'/>
 /// <reference path='easel.ts'/>
-/// <reference path='debug/tree.ts'/>
 
 /// <reference path='remotingGfx.ts' />
 /// <reference path='easelHost.ts' />

@@ -7,9 +7,6 @@ module Shumway.GFX.Canvas2D {
   import DirtyRegion = Shumway.GFX.Geometry.DirtyRegion;
   import Filter = Shumway.GFX.Filter;
   import BlendMode = Shumway.GFX.BlendMode;
-  import TileCache = Shumway.GFX.Geometry.TileCache;
-  import Tile = Shumway.GFX.Geometry.Tile;
-  import OBB = Shumway.GFX.Geometry.OBB;
   import clamp = Shumway.NumberUtilities.clamp;
   import pow2 = Shumway.NumberUtilities.pow2;
   import epsilonEquals = Shumway.NumberUtilities.epsilonEquals;

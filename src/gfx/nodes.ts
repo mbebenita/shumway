@@ -20,8 +20,6 @@ module Shumway.GFX {
   import Matrix = Geometry.Matrix;
   import DirtyRegion = Geometry.DirtyRegion;
   import Filter = Shumway.GFX.Filter;
-  import TileCache = Geometry.TileCache;
-  import Tile = Geometry.Tile;
   import OBB = Geometry.OBB;
 
   import assert = Shumway.Debug.assert;
