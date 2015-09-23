@@ -17,6 +17,7 @@
 /// <reference path='../../build/ts/base.d.ts' />
 /// <reference path='../../build/ts/tools.d.ts' />
 /// <reference path='../../build/ts/gfx-base.d.ts' />
+/// <reference path='../../build/ts/gfx-scene.d.ts' />
 
 /// <reference path='2d/debug.ts'/>
 /// <reference path='2d/surface.ts'/>
@@ -29,12 +30,3 @@
 /// <reference path='test/recorder.ts' />
 /// <reference path='test/playbackEaselHost.ts' />
 /// <reference path='test/recordingEaselHost.ts' />
-
-interface WebGLActiveInfo {
-  location: any;
-}
-
-interface WebGLProgram extends WebGLObject {
-  uniforms: any;
-  attributes: any;
-}

@@ -86,6 +86,9 @@ module.exports = function(grunt) {
       build_gfx_base_ts: {
         cmd: commonArguments + 'gfx-base.js src/gfx/references-base.ts'
       },
+      build_gfx_scene_ts: {
+        cmd: commonArguments + 'gfx-scene.js src/gfx/scene/references.ts'
+      },
       build_flash_ts: {
         cmd: commonArguments + 'flash.js src/flash/references.ts'
       },
@@ -726,6 +729,7 @@ module.exports = function(grunt) {
   grunt.registerTask('avm2', ['exec:build_avm2_ts', 'copy_relooper', 'test-quick']);
   grunt.registerTask('gfx', ['exec:build_gfx_base_ts', 'exec:build_gfx_ts', 'test-quick']);
   grunt.registerTask('gfx-base', ['exec:build_gfx_base_ts']);
+  grunt.registerTask('gfx-scene', ['exec:build_gfx_scene_ts']);
   grunt.registerTask('perf', ['exec:perf']);
   grunt.registerTask('gfx-test', ['exec:gfx-test']);
   grunt.registerTask('build', "Builds all modules.", [

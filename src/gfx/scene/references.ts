@@ -14,14 +14,11 @@
  * limitations under the License.
  */
 
-/// <reference path='../../build/ts/base.d.ts' />
-/// <reference path='../../build/ts/tools.d.ts' />
-
-/// <reference path='module.ts' />
-/// <reference path='utilities.ts' />
-/// <reference path='settings.ts'/>
+/// <reference path='module.ts'/>
 /// <reference path='geometry.ts'/>
-/// <reference path='regionAllocator.ts'/>
-/// <reference path='nodes.ts'/>
-/// <reference path='renderables/renderables.ts'/>
 /// <reference path='filters.ts'/>
+/// <reference path='nodes.ts'/>
+/// <reference path='regionAllocator.ts'/>
+
+/// <reference path='2d/surface.ts'/>
+/// <reference path='2d/2d.ts'/>

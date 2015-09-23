@@ -486,7 +486,7 @@ module Shumway.GFX {
           try {
             i = m.inverse();
           } catch (e) {
-            i = m = Geometry.Matrix.createIdentitySVGMatrix();
+            i = m = Matrix.createIdentitySVGMatrix();
           }
           // Transform the context by the style transform ...
           this.transform(m.a, m.b, m.c, m.d, m.e, m.f);
@@ -519,7 +519,7 @@ module Shumway.GFX {
           try {
             i = m.inverse();
           } catch (e) {
-            i = m = Geometry.Matrix.createIdentitySVGMatrix();
+            i = m = Matrix.createIdentitySVGMatrix();
           }
           // Transform the context by the style transform ...
           this.transform(m.a, m.b, m.c, m.d, m.e, m.f);
@@ -639,7 +639,7 @@ module Shumway.GFX {
           });
           Object.defineProperty(CanvasRenderingContext2D.prototype, 'currentTransform', {
             get: function () {
-              return this._currentTransform || (this._currentTransform = Geometry.Matrix.createIdentitySVGMatrix());
+              return this._currentTransform || (this._currentTransform = Matrix.createIdentitySVGMatrix());
             }
           });
         }
@@ -647,7 +647,7 @@ module Shumway.GFX {
 
       function mozPolyfillCurrentTransform() {
         release || assert(this.mozCurrentTransform);
-        return Geometry.Matrix.createSVGMatrixFromArray(this.mozCurrentTransform);
+        return Matrix.createSVGMatrixFromArray(this.mozCurrentTransform);
       }
     })();
   }
@@ -764,26 +764,5 @@ module Shumway.GFX {
         this.strokeStyle = oldStrokeStyle;
       }
     });
-  }
-}
-
-module Shumway.GFX {
-
-  export interface ISurface {
-    w: number;
-    h: number;
-    allocate(w: number, h: number): ISurfaceRegion;
-    free(surfaceRegion: ISurfaceRegion);
-  }
-
-  export interface ISurfaceRegion {
-    surface: ISurface;
-    region: RegionAllocator.Region;
-  }
-
-  export class ScreenShot {
-    constructor(public dataURL: string, public w: number, public h: number, public pixelRatio: number) {
-      // ...
-    }
   }
 }

@@ -14,12 +14,31 @@
  * limitations under the License.
  */
 
-module Shumway.GFX.Geometry {
+module Shumway.GFX {
 
-  import clamp = Shumway.NumberUtilities.clamp;
-  import pow2 = Shumway.NumberUtilities.pow2;
-  import epsilonEquals = Shumway.NumberUtilities.epsilonEquals;
-  import assert = Shumway.Debug.assert;
+  export function epsilonEquals(value: number, other: number): boolean {
+    return Math.abs(value - other) < 0.0000001;
+  }
+
+  export function pow2(exponent: number): number {
+    if (exponent === (exponent | 0)) {
+      if (exponent < 0) {
+        return 1 / (1 << -exponent);
+      }
+      return 1 << exponent;
+    }
+    return Math.pow(2, exponent);
+  }
+
+  export function clamp(value: number, min: number, max: number) {
+    return Math.max(min, Math.min(max, value));
+  }
+
+  export const enum Numbers {
+    MaxU16 = 0xFFFF,
+    MaxI16 = 0x7FFF,
+    MinI16 = -0x8000
+  }
 
   export function radianToDegrees(r) {
     return r * 180 / Math.PI;

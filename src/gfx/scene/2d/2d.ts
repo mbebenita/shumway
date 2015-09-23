@@ -1,21 +1,9 @@
 module Shumway.GFX.Canvas2D {
-
-  import assert = Shumway.Debug.assert;
-  import Rectangle = Shumway.GFX.Geometry.Rectangle;
-  import Point = Shumway.GFX.Geometry.Point;
-  import Matrix = Shumway.GFX.Geometry.Matrix;
-  import DirtyRegion = Shumway.GFX.Geometry.DirtyRegion;
-  import Filter = Shumway.GFX.Filter;
-  import BlendMode = Shumway.GFX.BlendMode;
-  import clamp = Shumway.NumberUtilities.clamp;
-  import pow2 = Shumway.NumberUtilities.pow2;
-  import epsilonEquals = Shumway.NumberUtilities.epsilonEquals;
-
   import ISurfaceRegionAllocator = SurfaceRegionAllocator.ISurfaceRegionAllocator;
 
   declare var registerScratchCanvas;
 
-  var writer = null; // new IndentingWriter(false, dumpLine);
+  var writer: Console = null; // new IndentingWriter(false, dumpLine);
 
   var MIN_CACHE_LEVELS = 5;
   var MAX_CACHE_LEVELS = 3;
@@ -66,18 +54,10 @@ module Shumway.GFX.Canvas2D {
         scaledBounds.scale(scale, scale);
         scaledBounds.snap();
         var surfaceRegion: Canvas2DSurfaceRegion = <any>this._surfaceRegionAllocator.allocate(scaledBounds.w, scaledBounds.h, null);
-        // surfaceRegion.fill(ColorStyle.randomStyle());
         var region = surfaceRegion.region;
         mipLevel = this._levels[levelIndex] = new MipMapLevel(surfaceRegion, scale);
         var surface = <Canvas2D.Canvas2DSurface>(mipLevel.surfaceRegion.surface);
         var context = surface.context;
-
-//        context.save();
-//        context.beginPath();
-//        context.rect(region.x, region.y, region.w, region.h);
-//        context.clip();
-//        context.setTransform(scale, 0, 0, scale, region.x - scaledBounds.x, region.y - scaledBounds.y);
-
         var state = new RenderState(surfaceRegion);
         state.clip.set(region);
         state.matrix.setElements(scale, 0, 0, scale, region.x - scaledBounds.x, region.y - scaledBounds.y);
@@ -200,7 +180,7 @@ module Shumway.GFX.Canvas2D {
       this.matrix.set(state.matrix);
       this.colorMatrix.set(state.colorMatrix);
       this.flags = state.flags;
-      ArrayUtilities.copyFrom(this.clipList, state.clipList);
+      copyFrom(this.clipList, state.clipList);
     }
 
     public clone(): RenderState {
@@ -284,12 +264,11 @@ module Shumway.GFX.Canvas2D {
     culledNodes = 0;
 
     enter(state: RenderState) {
-      Shumway.GFX.enterTimeline("Frame", {frame: this._count});
       this._count ++;
       if (!writer) {
         return;
       }
-      writer.enter("> Frame: " + this._count);
+      writer.group("> Frame: " + this._count);
       this._enterTime = performance.now();
 
       this.shapes = 0;
@@ -298,14 +277,13 @@ module Shumway.GFX.Canvas2D {
     }
 
     leave() {
-      Shumway.GFX.leaveTimeline("Frame");
       if (!writer) {
         return;
       }
-      writer.writeLn("Shapes: " + this.shapes + ", Groups: " + this.groups + ", Culled Nodes: " + this.culledNodes);
-      writer.writeLn("Elapsed: " + (performance.now() - this._enterTime).toFixed(2));
-      writer.writeLn("Rectangle: " + Rectangle.allocationCount + ", Matrix: " + Matrix.allocationCount + ", State: " + RenderState.allocationCount);
-      writer.leave("<");
+      writer.log("Shapes: " + this.shapes + ", Groups: " + this.groups + ", Culled Nodes: " + this.culledNodes);
+      writer.log("Elapsed: " + (performance.now() - this._enterTime).toFixed(2));
+      writer.log("Rectangle: " + Rectangle.allocationCount + ", Matrix: " + Matrix.allocationCount + ", State: " + RenderState.allocationCount);
+      writer.groupEnd();
     }
   }
 
@@ -731,7 +709,7 @@ module Shumway.GFX.Canvas2D {
       // Fill background
       if (!node.hasFlags(NodeFlags.Transparent) && node.color) {
         if (!(state.flags & RenderFlags.IgnoreRenderable)) {
-          this._container.style.backgroundColor = node.color.toCSSStyle();
+          this._container.style.backgroundColor = rgbaToCSSStyle(node.color);
         }
       }
 
@@ -788,7 +766,7 @@ module Shumway.GFX.Canvas2D {
       matrix.scale(1 / ratio, 1 / ratio);
 
       var bounds = node.getBounds();
-      var videoMatrix = Shumway.GFX.Geometry.Matrix.createIdentity();
+      var videoMatrix = Matrix.createIdentity();
       videoMatrix.scale(bounds.w / node.video.videoWidth, bounds.h / node.video.videoHeight);
       matrix.preMultiply(videoMatrix);
       videoMatrix.free();

@@ -31,7 +31,6 @@ function createEasel() {
 
 function setRelease(release) {
   window.release = release;
-  Shumway.GFX.Canvas2D.notifyReleaseChanged();
 }
 
 function setProfile(enabled) {

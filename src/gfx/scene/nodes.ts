@@ -15,16 +15,6 @@
  */
 
 module Shumway.GFX {
-  import Rectangle = Geometry.Rectangle;
-  import Point = Geometry.Point;
-  import Matrix = Geometry.Matrix;
-  import DirtyRegion = Geometry.DirtyRegion;
-  import Filter = Shumway.GFX.Filter;
-  import OBB = Geometry.OBB;
-
-  import assert = Shumway.Debug.assert;
-  import unexpected = Shumway.Debug.unexpected;
-
   export enum BlendMode {
     Normal     = 1,
     Layer      = 2,
@@ -278,7 +268,7 @@ module Shumway.GFX {
    * Debugging visitor.
    */
   export class TracingNodeVisitor extends NodeVisitor {
-    constructor(public writer: IndentingWriter) {
+    constructor(public writer: Console) {
       super();
     }
 
@@ -287,7 +277,7 @@ module Shumway.GFX {
     }
 
     visitShape(node: Shape, state: State) {
-      this.writer.writeLn(node.toString());
+      this.writer.log(node.toString());
       this.visitNode(node, state);
     }
 
@@ -295,11 +285,11 @@ module Shumway.GFX {
       this.visitNode(node, state);
 
       var children = node.getChildren();
-      this.writer.enter(node.toString() + " " + children.length);
+      this.writer.group(node.toString() + " " + children.length);
       for (var i = 0; i < children.length; i++) {
         children[i].visit(this, state);
       }
-      this.writer.outdent();
+      this.writer.groupEnd();
     }
 
     visitStage(node: Stage, state: State) {
@@ -507,11 +497,11 @@ module Shumway.GFX {
      * This shouldn't be used on any hot path becuse it allocates.
      */
     public getChildren(clone: boolean = false): Node [] {
-      throw Shumway.Debug.abstractMethod("Node::getChildren");
+      throw abstractMethod("Node::getChildren");
     }
 
     public getBounds(clone: boolean = false): Rectangle {
-      throw Shumway.Debug.abstractMethod("Node::getBounds");
+      throw abstractMethod("Node::getBounds");
     }
 
     /**
@@ -525,7 +515,7 @@ module Shumway.GFX {
     }
 
     public clone(): Node {
-      throw Shumway.Debug.abstractMethod("Node::clone");
+      throw abstractMethod("Node::clone");
     }
 
     public setFlags(flags: NodeFlags) {
@@ -573,7 +563,7 @@ module Shumway.GFX {
      * Propagates flags down the tree. Non-containers just set the flags on themselves.
      */
     _propagateFlagsDown(flags: NodeFlags) {
-      throw Shumway.Debug.abstractMethod("Node::_propagateFlagsDown");
+      throw abstractMethod("Node::_propagateFlagsDown");
     }
 
     public isAncestor(node: Node): boolean {
@@ -703,7 +693,7 @@ module Shumway.GFX {
           visitor.visitRenderable(<Renderable>this, state);
           break;
         default:
-          Debug.unexpectedCase();
+          unexpectedCase();
       }
     }
 
@@ -1151,9 +1141,24 @@ module Shumway.GFX {
     }
   }
 
+  export const enum StageScaleMode {
+    ShowAll             = 0,
+    ExactFit            = 1,
+    NoBorder            = 2,
+    NoScale             = 4
+  }
 
-  import StageAlignFlags = Shumway.Remoting.StageAlignFlags;
-  import StageScaleMode = Shumway.Remoting.StageScaleMode;
+  export const enum StageAlign {
+    None                = 0,
+    Top                 = 1,
+    Bottom              = 2,
+    Left                = 4,
+    Right               = 8,
+    TopLeft             = Top     | Left,
+    BottomLeft          = Bottom  | Left,
+    BottomRight         = Bottom  | Right,
+    TopRight            = Top     | Right
+  }
 
   function getRandomIntInclusive(min: number, max: number): number {
     return Math.floor(Math.random() * (max - min + 1)) + min;
@@ -1175,6 +1180,12 @@ module Shumway.GFX {
     Both = 2,
     DOM = 3, // Someday
     SVG = 4 // Someday
+  }
+
+  export class ScreenShot {
+    constructor(public dataURL: string, public w: number, public h: number, public pixelRatio: number) {
+      // ...
+    }
   }
 
   /**
@@ -1211,14 +1222,14 @@ module Shumway.GFX {
     }
 
     public render() {
-      throw Shumway.Debug.abstractMethod("Renderer::render");
+      throw abstractMethod("Renderer::render");
     }
 
     /**
      * Notify renderer that the viewport has changed.
      */
     public resize() {
-      throw Shumway.Debug.abstractMethod("Renderer::resize");
+      throw abstractMethod("Renderer::resize");
     }
 
     /**
@@ -1226,7 +1237,7 @@ module Shumway.GFX {
      * should be computed by looking at the bounds of the content of the easel rather than the easel itself.
      */
     public screenShot(bounds: Rectangle, stageContent: boolean, disableHidpi: boolean): ScreenShot {
-      throw Shumway.Debug.abstractMethod("Renderer::screenShot");
+      throw abstractMethod("Renderer::screenShot");
     }
   }
 
@@ -1243,7 +1254,7 @@ module Shumway.GFX {
       return this._dirtyRegion;
     }
 
-    private _align: StageAlignFlags;
+    private _align: StageAlign;
     private _scaleMode: StageScaleMode;
 
     /**
@@ -1256,8 +1267,8 @@ module Shumway.GFX {
 
     // Using these constants initially -- they don't require knowing bounds.
     // Notice that this default values are different from ActionScript object values.
-    private static DEFAULT_SCALE = StageScaleMode.NoScale;
-    private static DEFAULT_ALIGN = StageAlignFlags.Left | StageAlignFlags.Top;
+    private static defaultScale = StageScaleMode.NoScale;
+    private static defaultAlign = StageAlign.Left | StageAlign.Top;
 
     private _preVisitor: PreRenderVisitor = new PreRenderVisitor();
 
@@ -1265,8 +1276,8 @@ module Shumway.GFX {
       super();
       this._flags &= ~NodeFlags.BoundsAutoCompute;
       this._type = NodeType.Stage;
-      this._scaleMode = Stage.DEFAULT_SCALE;
-      this._align = Stage.DEFAULT_ALIGN;
+      this._scaleMode = Stage.defaultScale;
+      this._align = Stage.defaultAlign;
       this._content = new Group();
       this._content._flags &= ~NodeFlags.BoundsAutoCompute;
       this.addChild(this._content);
@@ -1309,11 +1320,11 @@ module Shumway.GFX {
       return false;
     }
 
-    public get align(): StageAlignFlags {
+    public get align(): StageAlign {
       return this._align;
     }
 
-    public set align(value: StageAlignFlags) {
+    public set align(value: StageAlign) {
       this._align = value;
       this._updateContentMatrix();
     }
@@ -1331,7 +1342,7 @@ module Shumway.GFX {
      * Figure out what the content transform shuold be given the current align and scale modes.
      */
     private _updateContentMatrix() {
-      if (this._scaleMode === Stage.DEFAULT_SCALE && this._align === Stage.DEFAULT_ALIGN) {
+      if (this._scaleMode === Stage.defaultScale && this._align === Stage.defaultAlign) {
         // Shortcut and also guard to avoid using targetWidth/targetHeight.
         // ThetargetWidth/targetHeight normally set in setScaleAndAlign call.
         this._content.getTransform().setMatrix(new Matrix(1, 0, 0, 1, 0, 0));
@@ -1363,18 +1374,18 @@ module Shumway.GFX {
       }
 
       var offsetX;
-      if ((this._align & StageAlignFlags.Left)) {
+      if ((this._align & StageAlign.Left)) {
         offsetX = 0;
-      } else if ((this._align & StageAlignFlags.Right)) {
+      } else if ((this._align & StageAlign.Right)) {
         offsetX = bounds.w - contentBounds.w * scaleX;
       } else {
         offsetX = (bounds.w - contentBounds.w * scaleX) / 2;
       }
 
       var offsetY;
-      if ((this._align & StageAlignFlags.Top)) {
+      if ((this._align & StageAlign.Top)) {
         offsetY = 0;
-      } else if ((this._align & StageAlignFlags.Bottom)) {
+      } else if ((this._align & StageAlign.Bottom)) {
         offsetY = bounds.h - contentBounds.h * scaleY;
       } else {
         offsetY = (bounds.h - contentBounds.h * scaleY) / 2;
@@ -1382,5 +1393,154 @@ module Shumway.GFX {
 
       this._content.getTransform().setMatrix(new Matrix(scaleX, 0, 0, scaleY, offsetX, offsetY));
     }
+  }
+
+  /**
+   * Represents some source renderable content.
+   */
+  export class Renderable extends Node {
+
+    /**
+     * Back reference to nodes that use this renderable.
+     */
+    private _parents: Shape [] = [];
+
+    /**
+     * Back reference to renderables that use this renderable.
+     */
+    private _renderableParents: Renderable [] = [];
+
+    public get parents(): Shape [] {
+      return this._parents;
+    }
+
+    public addParent(frame: Shape) {
+      release || assert(frame);
+      var index = indexOf(this._parents, frame);
+      release || assert(index < 0);
+      this._parents.push(frame);
+    }
+
+    /**
+     * Checks if this node will be reached by the renderer.
+     */
+    public willRender(): boolean {
+      var parents = this._parents;
+      for (var i = 0; i < parents.length; i++) {
+        var node = <Node>parents[i];
+        while (node) {
+          if (node.isType(NodeType.Stage)) {
+            return true;
+          }
+          if (!node.hasFlags(NodeFlags.Visible)) {
+            break;
+          }
+          node = node._parent;
+        }
+      }
+      return false;
+    }
+
+    public addRenderableParent(renderable: Renderable) {
+      release || assert(renderable);
+      release || assert(this._renderableParents.indexOf(renderable) === -1);
+      this._renderableParents.push(renderable);
+    }
+
+    /**
+     * Returns the first unrooted parent or creates a new parent if none was found.
+     */
+    public wrap(): Shape {
+      var node: Shape;
+      var parents = this._parents;
+      for (var i = 0; i < parents.length; i++) {
+        node = parents[i];
+        if (!node._parent) {
+          return node;
+        }
+      }
+      node = new Shape(this);
+      this.addParent(node);
+      return node;
+    }
+
+    public invalidate() {
+      this.setFlags(NodeFlags.Dirty);
+      var nodes = this._parents;
+      for (var i = 0; i < nodes.length; i++) {
+        nodes[i].invalidate();
+      }
+      var renderables = this._renderableParents;
+      for (var i = 0; i < renderables.length; i++) {
+        renderables[i].invalidate();
+      }
+      var listeners = this._invalidateEventListeners;
+      if (listeners) {
+        for (var i = 0; i < listeners.length; i++) {
+          listeners[i](this);
+        }
+      }
+    }
+
+    private _invalidateEventListeners: {(renderable: Renderable): void} [] = null;
+
+    public addInvalidateEventListener(listener: (renderable: Renderable) => void) {
+      if (!this._invalidateEventListeners) {
+        this._invalidateEventListeners = [];
+      }
+      var index = indexOf(this._invalidateEventListeners, listener);
+      release || assert(index < 0);
+      this._invalidateEventListeners.push(listener);
+    }
+
+
+    getBounds(clone: boolean = false): Rectangle {
+      if (clone) {
+        return this._bounds.clone();
+      }
+      return this._bounds;
+    }
+
+    public getChildren(clone: boolean = false): Node [] {
+      return null;
+    }
+
+    _propagateFlagsUp(flags: NodeFlags) {
+      if (flags === NodeFlags.None || this.hasFlags(flags)) {
+        return;
+      }
+      for (var i = 0; i < this._parents.length; i++) {
+        this._parents[i]._propagateFlagsUp(flags);
+      }
+    }
+
+    constructor() {
+      super();
+      this._flags &= ~NodeFlags.BoundsAutoCompute;
+      this._type = NodeType.Renderable;
+    }
+
+    /**
+     * Render source content in the specified |context| or add one or more paths to |clipPath| if specified.
+     * If specified, the rectangular |cullBounds| can be used to cull parts of the shape for better performance.
+     * If |paintStencil| is |true| then we must not create any alpha values, and also not paint any strokes.
+     */
+    render(context: CanvasRenderingContext2D, ratio: number, cullBounds?: Rectangle,
+           clipPath?: Path2D, paintStencil?: boolean): void {
+
+    }
+  }
+
+  export class CustomRenderable extends Renderable {
+    constructor(bounds: Rectangle, render: (context: CanvasRenderingContext2D, ratio: number, cullBounds: Rectangle) => void) {
+      super();
+      this.setBounds(bounds);
+      this.render = render;
+    }
+  }
+
+  // REMOVE THIS
+  export class RenderableVideo extends Renderable {
+    video: any;
   }
 }
