@@ -19,6 +19,7 @@
 /// <reference path='filters.ts'/>
 /// <reference path='nodes.ts'/>
 /// <reference path='regionAllocator.ts'/>
+/// <reference path='easel.ts'/>
 
 /// <reference path='2d/surface.ts'/>
 /// <reference path='2d/2d.ts'/>

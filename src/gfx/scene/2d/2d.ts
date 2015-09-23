@@ -749,6 +749,7 @@ module Shumway.GFX.Canvas2D {
         matrix.free();
       }
       Filters._removeFilter(context);
+      this._renderDebugInfo(node, state);
     }
 
     /**

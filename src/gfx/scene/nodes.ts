@@ -153,7 +153,7 @@ module Shumway.GFX {
                                         InvalidBounds |
                                         InvalidConcatenatedMatrix |
                                         InvalidInvertedConcatenatedMatrix |
-                                        Visible,
+                                        Visible
   }
 
   /**
@@ -285,7 +285,7 @@ module Shumway.GFX {
       this.visitNode(node, state);
 
       var children = node.getChildren();
-      this.writer.group(node.toString() + " " + children.length);
+      this.writer.group(node.toString() + " " + node.getBounds() + " " + node.flagsToString() + " " + children.length);
       for (var i = 0; i < children.length; i++) {
         children[i].visit(this, state);
       }
@@ -524,6 +524,26 @@ module Shumway.GFX {
 
     public hasFlags(flags: NodeFlags): boolean {
       return (this._flags & flags) === flags;
+    }
+
+    public flagsToString(): string {
+      var s = [];
+      if (this._flags & NodeFlags.Visible                          ) { s.push("Visible"); }
+      if (this._flags & NodeFlags.Transparent                      ) { s.push("Transparent"); }
+      if (this._flags & NodeFlags.IsMask                           ) { s.push("IsMask"); }
+      if (this._flags & NodeFlags.CacheAsBitmap                    ) { s.push("CacheAsBitmap"); }
+      if (this._flags & NodeFlags.PixelSnapping                    ) { s.push("PixelSnapping"); }
+      if (this._flags & NodeFlags.ImageSmoothing                   ) { s.push("ImageSmoothing"); }
+      if (this._flags & NodeFlags.Dynamic                          ) { s.push("Dynamic"); }
+      if (this._flags & NodeFlags.Scalable                         ) { s.push("Scalable"); }
+      if (this._flags & NodeFlags.Tileable                         ) { s.push("Tileable"); }
+      if (this._flags & NodeFlags.BoundsAutoCompute                ) { s.push("BoundsAutoCompute"); }
+      if (this._flags & NodeFlags.Dirty                            ) { s.push("Dirty"); }
+      if (this._flags & NodeFlags.InvalidBounds                    ) { s.push("InvalidBounds"); }
+      if (this._flags & NodeFlags.InvalidConcatenatedMatrix        ) { s.push("InvalidConcatenatedMatrix"); }
+      if (this._flags & NodeFlags.InvalidInvertedConcatenatedMatrix) { s.push("InvalidInvertedConcatenatedMatrix"); }
+      if (this._flags & NodeFlags.InvalidConcatenatedColorMatrix   ) { s.push("InvalidConcatenatedColorMatrix"); }
+      return s.join(", ");
     }
 
     public hasAnyFlags(flags: NodeFlags): boolean {
@@ -899,25 +919,35 @@ module Shumway.GFX {
       this._concatenatedColorMatrix = ColorMatrix.createIdentity(); // MEMORY: Lazify construction.
     }
 
-//    public get x(): number {
-//      return this._matrix.tx;
-//    }
-//
-//    public set x(value: number) {
-//      this._matrix.tx = value;
-//      this._node._propagateFlagsUp(NodeFlags.UpOnMoved);
-//      this._node._propagateFlagsDown(NodeFlags.DownOnMoved);
-//    }
-//
-//    public get y(): number {
-//      return this._matrix.ty;
-//    }
-//
-//    public set y(value: number) {
-//      this._matrix.ty = value;
-//      this._node._propagateFlagsUp(NodeFlags.UpOnMoved);
-//      this._node._propagateFlagsDown(NodeFlags.DownOnMoved);
-//    }
+    public get x(): number {
+      return this._matrix.tx;
+    }
+
+    public set x(value: number) {
+      if (this._matrix.tx === value) {
+        return;
+      }
+      this._node._markCurrentBoundsAsDirtyRegion();
+      this._matrix.tx = value;
+      this._node._propagateFlagsUp(NodeFlags.UpOnMoved);
+      this._node._propagateFlagsDown(NodeFlags.DownOnMoved);
+      this._node._markCurrentBoundsAsDirtyRegion();
+    }
+
+    public get y(): number {
+      return this._matrix.ty;
+    }
+
+    public set y(value: number) {
+      if (this._matrix.ty === value) {
+        return;
+      }
+      this._node._markCurrentBoundsAsDirtyRegion();
+      this._matrix.ty = value;
+      this._node._propagateFlagsUp(NodeFlags.UpOnMoved);
+      this._node._propagateFlagsDown(NodeFlags.DownOnMoved);
+      this._node._markCurrentBoundsAsDirtyRegion();
+    }
 
     /**
      * Set a node's transform matrix. You should never mutate the matrix object directly.
@@ -1141,14 +1171,14 @@ module Shumway.GFX {
     }
   }
 
-  export const enum StageScaleMode {
+  export enum StageScaleMode {
     ShowAll             = 0,
     ExactFit            = 1,
     NoBorder            = 2,
     NoScale             = 4
   }
 
-  export const enum StageAlign {
+  export enum StageAlign {
     None                = 0,
     Top                 = 1,
     Bottom              = 2,
