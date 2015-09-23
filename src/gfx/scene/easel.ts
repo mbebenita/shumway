@@ -475,17 +475,16 @@ module Shumway.GFX {
       return this._options;
     }
 
-    //Commented out during GFX split.
-    //getDisplayParameters(): DisplayParameters {
-    //  var ratio = this.getRatio();
-    //  return {
-    //    stageWidth: this._containerWidth,
-    //    stageHeight: this._containerHeight,
-    //    pixelRatio: ratio,
-    //    screenWidth: window.screen ? window.screen.width : 640,
-    //    screenHeight: window.screen ? window.screen.height : 480
-    //  };
-    //}
+    getDisplayParameters(): DisplayParameters {
+      var ratio = this.getRatio();
+      return {
+        stageWidth: this._containerWidth,
+        stageHeight: this._containerHeight,
+        pixelRatio: ratio,
+        screenWidth: window.screen ? window.screen.width : 640,
+        screenHeight: window.screen ? window.screen.height : 480
+      };
+    }
 
     public toggleOption(name: string) {
       var option = this._options;

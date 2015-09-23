@@ -15,10 +15,6 @@
  */
 
 module Shumway.GFX {
-  import Point = Geometry.Point;
-  import Rectangle = Geometry.Rectangle;
-  import PathCommand = Shumway.PathCommand;
-  import Matrix = Geometry.Matrix;
   import DataBuffer = Shumway.ArrayUtilities.DataBuffer;
   import swap32 = Shumway.IntegerUtilities.swap32;
   import memorySizeToString = Shumway.StringUtilities.memorySizeToString;
@@ -35,6 +31,9 @@ module Shumway.GFX {
 
   declare var registerInspectorAsset;
 
+  export var imageUpdateOption = true;
+  export var imageConvertOption = true;
+
   export interface IVideoPlaybackEventSerializer {
     sendVideoPlaybackEvent(assetId: number, eventType: VideoPlaybackEvent, data: any): void;
   }
@@ -46,6 +45,7 @@ module Shumway.GFX {
     Ended
   }
 
+  /*
   export class RenderableVideo extends Renderable {
     _flags = NodeFlags.Dynamic | NodeFlags.Dirty;
     private _video: HTMLVideoElement;
@@ -301,6 +301,7 @@ module Shumway.GFX {
       leaveTimeline("RenderableVideo.render");
     }
   }
+  */
 
   export class RenderableBitmap extends Renderable {
     _flags = NodeFlags.Dynamic | NodeFlags.Dirty;
@@ -322,7 +323,7 @@ module Shumway.GFX {
       return renderableBitmap;
     }
 
-    public static FromNode(source: Node, matrix: Shumway.GFX.Geometry.Matrix, colorMatrix: Shumway.GFX.ColorMatrix, blendMode: number, clipRect: Rectangle) {
+    public static FromNode(source: Node, matrix: Shumway.GFX.Matrix, colorMatrix: Shumway.GFX.ColorMatrix, blendMode: number, clipRect: Rectangle) {
       enterTimeline("RenderableBitmap.FromFrame");
       var canvas = document.createElement("canvas");
       var bounds = source.getBounds();
@@ -345,7 +346,7 @@ module Shumway.GFX {
     }
 
     public updateFromDataBuffer(type: ImageType, dataBuffer: DataBuffer) {
-      if (!imageUpdateOption.value) {
+      if (!imageUpdateOption) {
         return;
       }
       var buffer = dataBuffer.buffer;
@@ -358,7 +359,7 @@ module Shumway.GFX {
         if (!imageData || imageData.width !== bounds.w || imageData.height !== bounds.h) {
           imageData = this._imageData = this._context.createImageData(bounds.w, bounds.h);
         }
-        if (imageConvertOption.value) {
+        if (imageConvertOption) {
           enterTimeline("ColorUtilities.convertImage");
           var pixels = new Int32Array(buffer);
           var out = new Int32Array((<any>imageData.data).buffer);
@@ -401,7 +402,7 @@ module Shumway.GFX {
       leaveTimeline("RenderableBitmap.render");
     }
 
-    drawNode(source: Node, matrix: Shumway.GFX.Geometry.Matrix,
+    drawNode(source: Node, matrix: Shumway.GFX.Matrix,
              colorMatrix: Shumway.GFX.ColorMatrix, blendMode: number, clip: Rectangle): void {
       // TODO: Support colorMatrix and blendMode.
       enterTimeline("RenderableBitmap.drawFrame");
@@ -1220,7 +1221,7 @@ module Shumway.GFX {
     private _plainText: string;
     private _backgroundColor: number;
     private _borderColor: number;
-    private _matrix: Shumway.GFX.Geometry.Matrix;
+    private _matrix: Shumway.GFX.Matrix;
     private _coords: DataBuffer;
     private _scrollV: number;
     private _scrollH: number;
@@ -1250,7 +1251,7 @@ module Shumway.GFX {
       this.textRect.setElements(bounds.x + 2, bounds.y + 2, bounds.w - 2, bounds.h - 2);
     }
 
-    setContent(plainText: string, textRunData: DataBuffer, matrix: Shumway.GFX.Geometry.Matrix, coords: DataBuffer): void {
+    setContent(plainText: string, textRunData: DataBuffer, matrix: Shumway.GFX.Matrix, coords: DataBuffer): void {
       this._textRunData = textRunData;
       this._plainText = plainText;
       this._matrix.set(matrix);

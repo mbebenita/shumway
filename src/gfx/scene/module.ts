@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-declare var release;
+declare var release: boolean;
 
 declare class Path2D {
   constructor();
@@ -236,5 +236,12 @@ module Shumway.GFX {
     Normal = 1,
     Vertical = 2,
     Horizontal = 3
+  }
+  export interface DisplayParameters {
+    stageWidth: number;
+    stageHeight: number;
+    pixelRatio: number;
+    screenWidth: number;
+    screenHeight: number;
   }
 }
