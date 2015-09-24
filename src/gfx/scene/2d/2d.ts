@@ -1021,7 +1021,7 @@ module Shumway.GFX.Canvas2D {
     public screenShot(bounds: Rectangle, stageContent: boolean, disableHidpi: boolean): ScreenShot {
       if (stageContent) {
         // HACK: Weird way to get to the real content, but oh well...
-        var contentStage = <Stage>this._stage.content.groupChild.child;
+        var contentStage = <Stage>this._stage.content.groupChild.groupChild.child;
         assert (contentStage instanceof Stage);
         bounds = contentStage.content.getBounds(true);
         // Figure out the device bounds.

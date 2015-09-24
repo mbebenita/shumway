@@ -466,7 +466,7 @@ module Shumway.GFX {
     }
 
     _markCurrentBoundsAsDirtyRegion() {
-      // return;
+      return;
       var stage = this.getStage();
       if (!stage) {
         return;
