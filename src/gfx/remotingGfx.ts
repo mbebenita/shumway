@@ -49,6 +49,10 @@ module Shumway.Remoting.GFX {
   declare var registerInspectorAsset;
   declare var registerInspectorStage;
 
+  export function ARGBToRGBA(argb: number): number {
+    return argb << 8 | ((argb >> 24) & 0xff);
+  }
+
   export class GFXChannelSerializer {
     public output: IDataOutput;
     public outputAssets: any [];
@@ -513,7 +517,7 @@ module Shumway.Remoting.GFX {
       if (!context._nodes[id]) {
         context._nodes[id] = context.stage.content;
       }
-      var color = this.input.readInt();
+      var color = ARGBToRGBA(this.input.readInt());
       var bounds = this._readRectangle();
       // TODO: Need to updateContentMatrix on stage here.
       context.stage.content.setBounds(bounds);
