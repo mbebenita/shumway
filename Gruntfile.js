@@ -304,7 +304,6 @@ module.exports = function(grunt) {
           grunt: true
         },
         tasks: [
-          'exec:build_gfx_base_ts',
           'exec:build_gfx_ts',
           'exec:build_swf_ts',
           'exec:build_avm2_ts'
@@ -497,7 +496,7 @@ module.exports = function(grunt) {
       "build/ts/avm2.js",
       "build/ts/flash.js",
       "build/ts/avm1.js",
-      "build/ts/gfx-base.js",
+      "build/ts/gfx-scene.js",
       "build/ts/gfx.js",
       "build/ts/player.js"
     ], "build/shumway.cc.js", true, this.async());
@@ -512,7 +511,7 @@ module.exports = function(grunt) {
       ["build/ts/avm2.js", outputDir + "avm2.js"],
       ["build/ts/flash.js", outputDir + "flash.js"],
       ["build/ts/avm1.js", outputDir + "avm1.js"],
-      ["build/ts/gfx-base.js", outputDir + "gfx-base.js"],
+      ["build/ts/gfx-scene.js", outputDir + "gfx-scene.js"],
       ["build/ts/gfx.js", outputDir + "gfx.js"],
       ["build/ts/player.js", outputDir + "player.js"]
     ], true, this.async());
@@ -730,6 +729,7 @@ module.exports = function(grunt) {
     'parallel:base',
     'parallel:playerglobal',
     'exec:build_tools_ts',
+    'exec:build_gfx_scene_ts',
     'parallel:tier2',
     'copy_relooper',
     'parallel:natives',
