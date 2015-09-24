@@ -304,6 +304,7 @@ module.exports = function(grunt) {
           grunt: true
         },
         tasks: [
+          'exec:build_gfx_base_ts',
           'exec:build_gfx_ts',
           'exec:build_swf_ts',
           'exec:build_avm2_ts'
