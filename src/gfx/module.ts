@@ -14,16 +14,6 @@
  * limitations under the License.
  */
 
-//interface CanvasRenderingContext2D {
-//  filter: string;
-//  globalColorMatrix: Shumway.GFX.ColorMatrix;
-//  flashStroke(path: Path2D, lineScaleMode: Shumway.LineScaleMode);
-//}
-//
-//interface CanvasGradient {
-//  _template: any;
-//}
-
 module Shumway.GFX {
   import assert = Shumway.Debug.assert;
   import clamp = Shumway.NumberUtilities.clamp;
